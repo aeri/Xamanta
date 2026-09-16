@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<lint>
+
+    <issue id="AcceptsUserCertificates">
+        <ignore path="src/main/res/xml/network_security_config.xml" />
+    </issue>
+
+    <issue id="OldTargetApi">
+        <ignore path="build.gradle.kts" />
+    </issue>
+
+    <issue id="NewerVersionAvailable">
+        <ignore regexp="org\.jetbrains\.kotlin\.plugin\.serialization" />
+        <ignore regexp="kotlinx-coroutines-android" />
+    </issue>
+    <issue id="GradleDependency">
+        <ignore regexp="org\.jetbrains\.kotlin\.plugin\.serialization" />
+        <ignore regexp="kotlinx-coroutines-android" />
+    </issue>
+
+    <issue id="UseKtx">
+        <ignore path="src/main/java/cat/naval/xamanta/policy/PolicyStore.kt" />
+    </issue>
+
+    <issue id="MissingPermission">
+        <ignore path="src/main/java/cat/naval/xamanta/policy/commands/connectivity/OpenNetworkConfigurationCommand.kt" />
+    </issue>
+
+</lint>

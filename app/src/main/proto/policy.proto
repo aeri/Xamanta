@@ -1,0 +1,2681 @@
+// Portions of this file's documentation are copied or adapted from the Android Management API
+// reference (https://developers.google.com/android/management/reference/rest/v1/), (c) Google LLC,
+// licensed under the Creative Commons Attribution 4.0 License
+// (https://creativecommons.org/licenses/by/4.0/). Field and enum descriptions that have an Android
+// Management API counterpart are reproduced verbatim from its discovery document; the rest describe
+// Xamanta's own surface and say so. Xamanta is not affiliated with, endorsed by, or sponsored by
+// Google. Android is a trademark of Google LLC.
+
+syntax = "proto3";
+
+// Xamanta policy reference
+//
+// A policy is a group of settings that govern the behavior of a managed device and the apps
+// installed on it. The schema deliberately follows the Android Management API
+// (https://developers.google.com/android/management/reference/rest/v1/enterprises.policies), and
+// every field that has a counterpart there carries Google's own description. Fields that are
+// Xamanta's own say so.
+//
+// Xamanta operates exclusively as device owner, on a fully managed device. Any setting that only
+// makes sense in a work profile is reported as MANAGEMENT_MODE non-compliance.
+//
+// A policy is the device's entire desired state, not a patch: every reconciliation pass applies the
+// whole policy, and a field the policy stops setting is withdrawn from the device.
+//
+// How Xamanta translates each setting into an Android primitive, the minimum API level it needs,
+// and the settingName it reports on failure are in doc/policy-spec.md. This file is the wire
+// contract; that document is the behaviour.
+package policy;
+
+option java_package = "cat.naval.xamanta.protos";
+option java_outer_classname = "PolicyProto";
+option java_multiple_files = true;
+option csharp_namespace = "XamantaC2";
+
+// A policy resource represents a group of settings that govern the behavior of a managed device and
+// the apps installed on it.
+message Policy {
+  reserved 1, 2;
+
+  // The name of the policy in the form enterprises/{enterpriseId}/policies/{policyId}.
+  string name = 3;
+
+  // The version of the policy. This is a read-only field. The version is incremented each time the
+  // policy is updated.
+  int32 version = 4;
+
+  // Free text describing the policy. Shown on the DPC's sync screen only; it has no effect on what
+  // is applied.
+  string description = 5;
+
+  // The settings to apply to the device. Absent is equivalent to an empty DevicePolicy, which is
+  // not the same as an unrestricted device: several settings default to their restrictive value.
+  DevicePolicy device_policy = 6;
+
+  // The version of the DPC itself that the device should be running. Absent means no self-update is
+  // requested.
+  SelfUpdate self_update = 7;
+}
+
+// Instructs the DPC to update itself. Xamanta-specific: with no Google Play dependency the server
+// supplies the APK, so the DPC verifies it the way a store would. The update is installed only when
+// version_code is strictly greater than the running version, the APK is the same package, its own
+// versionCode is greater, it shares at least one signing certificate with the installed DPC, it is
+// at most 256 MiB, and sha256_sum matches if given. It runs even when the DPC has lost device
+// owner, which makes it the only route back.
+message SelfUpdate {
+  // The target PackageInfo.longVersionCode. The DPC acts only when this is strictly greater than
+  // the version it is running.
+  int64  version_code = 1;
+
+  // The URL of the APK. HTTPS only; any other scheme fails with NOT_FOUND.
+  string download_url = 2;
+
+  // The SHA-256 of the APK in hexadecimal. When present it must match the downloaded bytes.
+  // Optional: without it, integrity rests on HTTPS and on the signing certificate matching the
+  // installed DPC.
+  string sha256_sum   = 3;
+}
+
+// A policy resource represents a group of settings that govern the behavior of a managed device and
+// the apps installed on it.
+message DevicePolicy {
+  // A free-form identifier for the server's own bookkeeping. The device never reads it.
+  string id = 1;
+
+  reserved 2;
+
+  // Policy applied to apps. This can have at most 3,000 elements.
+  repeated ApplicationPolicy applications = 3;
+
+  // Whether adding new users and profiles is disabled. For devices where managementMode is
+  // DEVICE_OWNER this field is ignored and the user is never allowed to add or remove users.
+  bool add_user_disabled = 4;
+
+  // Whether adjusting the master volume is disabled. Also mutes the device. The setting has effect
+  // only on fully managed devices.
+  bool adjust_volume_disabled = 5;
+
+  // Whether factory resetting from settings is disabled.
+  bool factory_reset_disabled = 6;
+
+  // Whether user installation of apps is disabled.
+  bool install_apps_disabled = 7;
+
+  // Whether the user mounting physical external media is disabled.
+  bool mount_physical_media_disabled = 8;
+
+  // Whether adding or removing accounts is disabled.
+  bool modify_accounts_disabled = 9;
+
+  // Whether user uninstallation of applications is disabled. This prevents apps from being
+  // uninstalled, even those removed using applications
+  bool uninstall_apps_disabled = 11;
+
+  // If true, this disables the Lock Screen
+  // (https://source.android.com/docs/core/display/multi_display/lock-screen) for primary and/or
+  // secondary displays. This policy is supported only in dedicated device management mode.
+  bool keyguard_disabled = 13;
+
+  // Whether configuring bluetooth is disabled.
+  bool bluetooth_config_disabled = 14;
+
+  // Whether configuring cell broadcast is disabled.
+  bool cell_broadcasts_config_disabled = 15;
+
+  // Whether configuring user credentials is disabled.
+  bool credentials_config_disabled = 16;
+
+  // Whether configuring mobile networks is disabled.
+  bool mobile_networks_config_disabled = 17;
+
+  // Whether configuring VPN is disabled.
+  bool vpn_config_disabled = 19;
+
+  // Whether creating windows besides app windows is disabled.
+  bool create_windows_disabled = 21;
+
+  // Whether resetting network settings is disabled. This applies only on fully managed devices. A
+  // NonComplianceDetail with MANAGEMENT_MODE is reported for other management modes.
+  bool network_reset_disabled = 22;
+
+  // Whether using NFC to beam data from apps is disabled.
+  bool outgoing_beam_disabled = 23;
+
+  // Whether outgoing calls are disabled.
+  bool outgoing_calls_disabled = 24;
+
+  // Whether removing other users is disabled.
+  bool remove_user_disabled = 25;
+
+  // Whether sending and receiving SMS messages is disabled.
+  bool sms_disabled = 27;
+
+  // Whether the user is allowed to have fun. Controls whether the Easter egg game in Settings is
+  // disabled.
+  bool fun_disabled = 32;
+
+  // Whether screen capture is disabled. This also blocks Circle to Search
+  // (https://support.google.com/android/answer/14508957).
+  bool screen_capture_disabled = 34;
+
+  reserved 36;
+
+  reserved 43, 44, 45;
+
+  // Maximum time in milliseconds for user activity until the device locks. A value of 0 means there
+  // is no restriction.
+  int64 maximum_time_to_lock_ms = 37;
+
+  // Disabled keyguard customizations, such as widgets.
+  int32 keyguard_disabled_features = 38;
+
+  // If present, only the input methods provided by packages in this list are permitted. If this
+  // field is present, but the list is empty, then only system input methods are permitted.
+  PackageNameList permitted_input_methods = 39;
+
+  // Specifies permitted accessibility services. If the field is not set, any accessibility service
+  // can be used. If the field is set, only the accessibility services in this list and the system's
+  // built-in accessibility service can be used. In particular, if the field is set to empty, only
+  // the system's built-in accessibility servicess can be used. This can be set on fully managed
+  // devices and on work profiles. When applied to a work profile, this affects both the personal
+  // profile and the work profile.
+  PackageNameList permitted_accessibility_services = 40;
+
+  // The system update policy, which controls how OS updates are applied. If the update type is
+  // WINDOWED, the update window will automatically apply to Play app updates as well.Note: Google
+  // Play system updates (https://source.android.com/docs/core/ota/modular-system) (also called
+  // Mainline updates) are automatically downloaded and require a device reboot to be installed.
+  // Refer to the mainline section in Manage system updates
+  // (https://developer.android.com/work/dpc/system-updates#mainline) for further details.
+  SystemUpdate system_update = 41;
+
+  // The battery plugged in modes for which the device stays on. When using this setting, it is
+  // recommended to clear maximum_time_to_lock so that the device doesn't lock itself while it stays
+  // on.
+  repeated BatteryPluggedMode stay_on_plugged_modes = 42;
+
+  // Factory reset protection: which accounts may provision the device after a factory reset. Absent
+  // clears the policy.
+  FactoryResetProtection factory_reset_protection = 46;
+
+  // The default permission policy for runtime permission requests.
+  PermissionPolicy default_permission_policy = 47;
+
+  // Settings controlling the behavior of a device in kiosk mode. To enable kiosk mode, set
+  // kioskCustomLauncherEnabled to true or specify an app in the policy with installType KIOSK.
+  KioskCustomization kiosk_customization = 48;
+
+  // Whether bluetooth is disabled. Prefer this setting over bluetooth_config_disabled because
+  // bluetooth_config_disabled can be bypassed by the user.
+  bool bluetooth_disabled = 50;
+
+  // Whether bluetooth contact sharing is disabled.
+  bool bluetooth_contact_sharing_disabled = 51;
+
+  // Whether roaming data services are disabled.
+  bool data_roaming_disabled = 52;
+
+  // Whether changing the user icon is disabled. This applies only on devices running Android 7 and
+  // above.
+  bool set_user_icon_disabled = 53;
+
+  // Whether changing the wallpaper is disabled.
+  bool set_wallpaper_disabled = 54;
+
+  // Flag to skip hints on the first use. Enterprise admin can enable the system recommendation for
+  // apps to skip their user tutorial and other introductory hints on first start-up.
+  bool skip_first_use_hints_enabled = 55;
+
+  // The degree of location detection enabled.
+  LocationMode location_mode = 56;
+
+  // Optional. Controls whether printing is allowed. This is supported on devices running Android 9
+  // and above. .
+  PrintingPolicy printing_policy = 57;
+
+  // Controls the use of the camera and whether the user has access to the camera access toggle.
+  CameraAccess camera_access = 58;
+
+  // Controls the use of the microphone and whether the user has access to the microphone access
+  // toggle. This applies only on fully managed devices.
+  MicrophoneAccess microphone_access = 59;
+
+  // Whether auto date, time, and time zone are enabled on a company-owned device. If this is set,
+  // then autoTimeRequired is ignored.
+  AutoDateAndTimeZone auto_date_and_time_zone = 60;
+
+  // Optional. Controls whether AssistContent
+  // (https://developer.android.com/reference/android/app/assist/AssistContent) is allowed to be
+  // sent to a privileged app such as an assistant app. AssistContent includes screenshots and
+  // information about an app, such as package name. This is supported on Android 15 and above.
+  AssistContentPolicy assist_content_policy = 61;
+
+  // Whether encryption is enabled
+  EncryptionPolicy encryption_policy = 62;
+
+  // Controls the Memory Tagging Extension on the device.
+  MtePolicy mte_policy = 63;
+
+  // Optional. Controls which apps are allowed to act as credential providers on Android 14 and
+  // above. These apps store credentials, see this (https://developer.android.com/training/sign-
+  // in/passkeys) and this
+  // (https://developer.android.com/reference/androidx/credentials/CredentialManager) for details.
+  // See also credentialProviderPolicy.
+  CredentialProviderPolicyDefault credential_provider_policy_default = 64;
+
+  // Advanced security settings. In most cases, setting these is not needed.
+  AdvancedSecurityOverrides advanced_security_overrides = 65;
+
+  // Optional. Covers controls for radio state such as Wi-Fi, bluetooth, and more.
+  DeviceRadioState device_radio_state = 66;
+
+  // Covers controls for device connectivity such as Wi-Fi, USB data access, keyboard/mouse
+  // connections, and more.
+  DeviceConnectivityManagement device_connectivity_management = 67;
+
+  // Optional. Controls for the display settings.
+  DisplaySettings display_settings = 68;
+
+  // Configuration for an always-on VPN connection. Use with vpn_config_disabled to prevent
+  // modification of this setting.
+  AlwaysOnVpnPackage always_on_vpn_package = 69;
+
+  // The network-independent global HTTP proxy. Typically proxies should be configured per-network
+  // in open_network_configuration. However for unusual configurations like general internal
+  // filtering a global HTTP proxy may be useful. If the proxy is not accessible, network access may
+  // break. The global proxy is only a recommendation and some apps may ignore it.
+  ProxyInfo recommended_global_proxy = 70;
+
+  // Account types that can't be managed by the user.
+  repeated string account_types_with_management_disabled = 71;
+
+  // Default intent handler activities.Warning: Do not configure this and
+  // default_application_settings for the same intent domain, such as web browsing. Setting both for
+  // the same intent domain can lead to unpredictable behavior.
+  repeated PersistentPreferredActivity persistent_preferred_activities = 72;
+
+  // Password requirement policies. Different policies can be set for work profile or fully managed
+  // devices by setting the password_scope field in the policy.
+  repeated PasswordRequirements password_policies = 73;
+
+  // Optional. The default application setting for supported types. If the default application is
+  // successfully set for at least one app type on a profile, users are prevented from changing any
+  // default applications on that profile.Only one DefaultApplicationSetting is allowed for each
+  // DefaultApplicationType.Warning: Do not configure this and persistent_preferred_activities for
+  // the same intent domain, such as web browsing. Setting both for the same intent domain can lead
+  // to unpredictable behavior.See Default application settings
+  // (https://developers.google.com/android/management/default-application-settings) guide for more
+  // details.
+  repeated DefaultApplicationSetting default_application_settings = 74;
+
+  // Optional. Controls whether apps on the device for fully managed devices or in the work profile
+  // for devices with work profiles are allowed to expose app functions.
+  AppFunctions app_functions = 75;
+
+  // Optional. Wipe flags to indicate what data is wiped when a device or profile wipe is triggered
+  // due to any reason (for example, non-compliance). This does not apply to the
+  // enterprises.devices.delete method. . This list must not have duplicates.
+  repeated WipeDataFlag wipe_data_flags = 76;
+
+  // The minimum allowed Android API level.
+  int32 minimum_api_level = 77;
+
+  // Status reporting settings
+  StatusReportingSettings status_reporting_settings = 78;
+
+  // Rules for determining apps' access to private keys. See ChoosePrivateKeyRule for details. This
+  // must be empty if any application has CERT_SELECTION delegation scope.
+  repeated ChoosePrivateKeyRule choose_private_key_rules = 79;
+
+  // Network configuration for the device. See configure networks for more information.
+  OpenNetworkConfiguration open_network_configuration = 80;
+
+  // Controls whether preferential network service is enabled on the work profile or on fully
+  // managed devices. For example, an organization may have an agreement with a carrier that all of
+  // the work data from its employees' devices will be sent via a network service dedicated for
+  // enterprise use. An example of a supported preferential network service is the enterprise slice
+  // on 5G networks. This policy has no effect if preferentialNetworkServiceSettings or
+  // ApplicationPolicy.preferentialNetworkId is set on devices running Android 13 or above.
+  PreferentialNetworkService preferential_network_service = 81;
+
+  // The device owner information to be shown on the lock screen.
+  UserFacingMessage device_owner_lock_screen_info = 82;
+
+  // A message displayed to the user in the settings screen wherever functionality has been disabled
+  // by the admin. If the message is longer than 200 characters it may be truncated.
+  UserFacingMessage short_support_message = 83;
+
+  // A message displayed to the user in the device administators settings screen.
+  UserFacingMessage long_support_message = 84;
+}
+
+// Provides a user-facing message with locale info. The maximum message length is 4096 characters.
+message UserFacingMessage {
+  // The default message displayed if no localized message is specified or the user's locale doesn't
+  // match with any of the localized messages. A default message must be provided if any localized
+  // messages are provided.
+  string default_message = 1;
+
+  // A map containing pairs, where locale is a well-formed BCP 47 language
+  // (https://www.w3.org/International/articles/language-tags/) code, such as en-US, es-ES, or fr.
+  map<string, string> localized_messages = 2;
+}
+
+// Settings controlling the behavior of a device in kiosk mode. To enable kiosk mode, set
+// kioskCustomLauncherEnabled to true or specify an app in the policy with installType KIOSK.
+message KioskCustomization {
+  enum PowerButtonActions {
+    // Unspecified, defaults to POWER_BUTTON_AVAILABLE.
+    POWER_BUTTON_ACTIONS_UNSPECIFIED = 0;
+
+    // The power menu (e.g. Power off, Restart) is shown when a user long-presses the Power button
+    // of a device in kiosk mode.
+    POWER_BUTTON_AVAILABLE = 1;
+
+    // The power menu (e.g. Power off, Restart) is not shown when a user long-presses the Power
+    // button of a device in kiosk mode. Note: this may prevent users from turning off the device.
+    POWER_BUTTON_BLOCKED = 2;
+  }
+  enum SystemErrorWarnings {
+    // Unspecified, defaults to ERROR_AND_WARNINGS_MUTED.
+    SYSTEM_ERROR_WARNINGS_UNSPECIFIED = 0;
+
+    // All system error dialogs such as crash and app not responding (ANR) are displayed.
+    ERROR_AND_WARNINGS_ENABLED = 1;
+
+    // All system error dialogs, such as crash and app not responding (ANR) are blocked. When
+    // blocked, the system force-stops the app as if the user closes the app from the UI.
+    ERROR_AND_WARNINGS_MUTED = 2;
+  }
+  enum SystemNavigation {
+    // Unspecified, defaults to NAVIGATION_DISABLED.
+    SYSTEM_NAVIGATION_UNSPECIFIED = 0;
+
+    // Home and overview buttons are enabled.
+    NAVIGATION_ENABLED = 1;
+
+    // The home and Overview buttons are not accessible.
+    NAVIGATION_DISABLED = 2;
+
+    // Only the home button is enabled.
+    HOME_BUTTON_ONLY = 3;
+  }
+  enum StatusBar {
+    // Unspecified, defaults to INFO_AND_NOTIFICATIONS_DISABLED.
+    STATUS_BAR_UNSPECIFIED = 0;
+
+    // System info and notifications are shown on the status bar in kiosk mode.Note: For this policy
+    // to take effect, the device's home button must be enabled using
+    // kioskCustomization.systemNavigation.
+    NOTIFICATIONS_AND_SYSTEM_INFO_ENABLED = 1;
+
+    // System info and notifications are disabled in kiosk mode.
+    NOTIFICATIONS_AND_SYSTEM_INFO_DISABLED = 2;
+
+    // Only system info is shown on the status bar.
+    SYSTEM_INFO_ONLY = 3;
+  }
+  enum DeviceSettings {
+    // Unspecified, defaults to SETTINGS_ACCESS_ALLOWED.
+    DEVICE_SETTINGS_UNSPECIFIED = 0;
+
+    // Access to the Settings app is allowed in kiosk mode.
+    SETTINGS_ACCESS_ALLOWED = 1;
+
+    // Access to the Settings app is not allowed in kiosk mode.
+    SETTINGS_ACCESS_BLOCKED = 2;
+  }
+
+  // Sets the behavior of a device in kiosk mode when a user presses and holds (long-presses) the
+  // Power button.
+  PowerButtonActions power_button_actions = 1;
+
+  // Specifies whether system error dialogs for crashed or unresponsive apps are blocked in kiosk
+  // mode. When blocked, the system will force-stop the app as if the user chooses the "close app"
+  // option on the UI.
+  SystemErrorWarnings system_error_warnings = 2;
+
+  // Specifies which navigation features are enabled (e.g. Home, Overview buttons) in kiosk mode.
+  SystemNavigation system_navigation = 3;
+
+  // Specifies whether system info and notifications are disabled in kiosk mode.
+  StatusBar status_bar = 4;
+
+  // Specifies whether the Settings app is allowed in kiosk mode.
+  DeviceSettings device_settings = 5;
+}
+
+// A list of package names.
+message PackageNameList {
+  // A list of package names.
+  repeated string package_names = 1;
+}
+
+// Configuration for managing system updatesNote: Google Play system updates
+// (https://source.android.com/docs/core/ota/modular-system) (also called Mainline updates) are
+// automatically downloaded but require a device reboot to be installed. Refer to the mainline
+// section in Manage system updates (https://developer.android.com/work/dpc/system-updates#mainline)
+// for further details.
+message SystemUpdate {
+  enum SystemUpdateType {
+    // Follow the default update behavior for the device, which typically requires the user to
+    // accept system updates.
+    SYSTEM_UPDATE_TYPE_UNSPECIFIED = 0;
+
+    // Install automatically as soon as an update is available.
+    AUTOMATIC = 1;
+
+    // Install automatically within a daily maintenance window. This also configures Play apps to be
+    // updated within the window. This is strongly recommended for kiosk devices because this is the
+    // only way apps persistently pinned to the foreground can be updated by Play.If autoUpdateMode
+    // is set to AUTO_UPDATE_HIGH_PRIORITY for an app, then the maintenance window is ignored for
+    // that app and it is updated as soon as possible even outside of the maintenance window.
+    WINDOWED  = 2;
+
+    // Postpone automatic install up to a maximum of 30 days. This policy does not affect security
+    // updates (e.g. monthly security patches).
+    POSTPONE  = 3;
+  }
+  // The type of system update to configure.
+  SystemUpdateType type = 1;
+
+  // If the type is WINDOWED, the start of the maintenance window, measured as the number of minutes
+  // after midnight in the device's local time. This value must be between 0 and 1439, inclusive.
+  int32 start_minutes = 2;
+
+  // If the type is WINDOWED, the end of the maintenance window, measured as the number of minutes
+  // after midnight in device's local time. This value must be between 0 and 1439, inclusive. If
+  // this value is less than start_minutes, then the maintenance window spans midnight. If the
+  // maintenance window specified is smaller than 30 minutes, the actual window is extended to 30
+  // minutes beyond the start time.
+  int32 end_minutes = 3;
+}
+
+enum BatteryPluggedMode {
+  // This value is ignored.
+  BATTERY_PLUGGED_MODE_UNSPECIFIED = 0;
+
+  // Power source is an AC charger.
+  AC = 1;
+
+  // Power source is a USB port.
+  USB = 2;
+
+  // Power source is wireless.
+  WIRELESS = 3;
+}
+
+// Factory reset protection policy. Requires Android 11 and hardware support; a device without it is
+// reported as UNSUPPORTED only when the policy asked for it.
+message FactoryResetProtection {
+  // Account identifiers allowed to provision the device after a factory reset.
+  repeated string account_ids = 1;
+
+  // Whether factory reset protection is disabled entirely, letting anyone provision the device
+  // after a reset.
+  bool disabled = 2;
+}
+
+enum PermissionPolicy {
+  // Policy not specified. If no policy is specified for a permission at any level, then the PROMPT
+  // behavior is used by default.
+  PERMISSION_POLICY_UNSPECIFIED = 0;
+
+  // Prompt the user to grant a permission.
+  PROMPT = 1;
+
+  // Automatically grant a permission.On Android 12 and above, READ_SMS
+  // (https://developer.android.com/reference/android/Manifest.permission#READ_SMS) and following
+  // sensor-related permissions can only be granted on fully managed devices: ACCESS_FINE_LOCATION
+  // (https://developer.android.com/reference/android/Manifest.permission#ACCESS_FINE_LOCATION)
+  // ACCESS_BACKGROUND_LOCATION (https://developer.android.com/reference/android/Manifest.permission
+  // #ACCESS_BACKGROUND_LOCATION) ACCESS_COARSE_LOCATION
+  // (https://developer.android.com/reference/android/Manifest.permission#ACCESS_COARSE_LOCATION)
+  // CAMERA (https://developer.android.com/reference/android/Manifest.permission#CAMERA)
+  // RECORD_AUDIO (https://developer.android.com/reference/android/Manifest.permission#RECORD_AUDIO)
+  // ACTIVITY_RECOGNITION
+  // (https://developer.android.com/reference/android/Manifest.permission#ACTIVITY_RECOGNITION)
+  // BODY_SENSORS (https://developer.android.com/reference/android/Manifest.permission#BODY_SENSORS)
+  GRANT  = 2;
+
+  // Automatically deny a permission.
+  DENY   = 3;
+}
+
+// Configuration for an Android permission and its grant state.
+message PermissionGrant {
+  // The Android permission or group, e.g. android.permission.READ_CALENDAR or
+  // android.permission_group.CALENDAR.
+  string permission = 1;
+
+  // The policy for granting the permission.
+  PermissionPolicy policy = 2;
+}
+
+enum InstallType {
+  // Unspecified. Defaults to AVAILABLE.
+  INSTALL_TYPE_UNSPECIFIED = 0;
+
+  // App is installed on the device
+  INSTALLED        = 1;
+
+  // The app is automatically installed regardless of a set maintenance window and can't be removed
+  // by the user.
+  FORCE_INSTALLED  = 2;
+
+  // The role type for kiosk apps. An app can have this role only if it has installType set to
+  // REQUIRED_FOR_SETUP or CUSTOM. Before adding this role to an app with CUSTOM install type, the
+  // app must already be installed on the device.The app having this role type is set as the
+  // preferred home intent and allowlisted for lock task mode. When there is an app with this role
+  // type, status bar will be automatically disabled.This is preferable to setting installType to
+  // KIOSK.On Android 11 and above, when an app has this role, the user control is disallowed for
+  // all apps. The IT admin can set userControlSettings to USER_CONTROL_ALLOWED to allow user
+  // control for specific apps.
+  KIOSK            = 3;
+
+  // The app is blocked and can't be installed in the personal profile. If the app was previously
+  // installed in the device, it will be uninstalled.
+  BLOCKED          = 4;
+
+  // The app is available to install in the personal profile.
+  AVAILABLE        = 5;
+}
+
+// Policy for an individual app. Note: Application availability on a given device cannot be changed
+// using this policy if installAppsDisabled is enabled. The maximum number of applications that you
+// can specify per policy is 3,000.
+message ApplicationPolicy {
+  // The package name of the app. For example, com.google.android.youtube for the YouTube app.
+  string package_name = 1;
+
+  // The URL of the APK to install. HTTPS only. Xamanta-specific: apps are not installed from Google
+  // Play, so the policy names the bytes. Required for INSTALLED, FORCE_INSTALLED and KIOSK when the
+  // app is neither installed already nor a system app.
+  string download_url = 2;
+
+  // The SHA-256 of the APK in hexadecimal, case-insensitive. When present it pins one exact build,
+  // and a download that does not match is rejected.
+  string sha256_sum   = 3;
+
+  // The type of installation to perform.
+  InstallType install_type = 4;
+
+  // Explicit permission grants or denials for the app. These values override the
+  // default_permission_policy and permission_grants which apply to all apps.
+  repeated PermissionGrant permission_grants = 5;
+
+  // The minimum version of the app that runs on the device. If set, the device attempts to update
+  // the app to at least this version code. If the app is not up-to-date, the device will contain a
+  // NonComplianceDetail with non_compliance_reason set to APP_NOT_UPDATED. The app must already be
+  // published to Google Play with a version code greater than or equal to this value. At most 20
+  // apps may specify a minimum version code per policy.
+  int64 minimum_version_code = 6;
+
+  // The default policy for all permissions requested by the app. If specified, this overrides the
+  // policy-level default_permission_policy which applies to all apps. It does not override the
+  // permission_grants which applies to all apps.
+  PermissionPolicy default_permission_policy = 7;
+
+  // Managed configuration applied to the app. The format for the configuration is dictated by the
+  // ManagedProperty values supported by the app. Each field name in the managed configuration must
+  // match the key field of the ManagedProperty. The field value must be compatible with the type of
+  // the ManagedProperty: *type* *JSON value* BOOL true or false STRING string INTEGER number CHOICE
+  // string MULTISELECT array of strings HIDDEN string BUNDLE_ARRAY array of objects Note: string
+  // values cannot be longer than 65535 characters.
+  repeated ManagedProperty managed_configuration = 8;
+
+  // The scopes delegated to the app from Android Device Policy. These provide additional privileges
+  // for the applications they are applied to.
+  repeated DelegatedScope delegated_scopes = 9;
+
+  // Specifies whether the app is allowed networking when the VPN is not connected and
+  // alwaysOnVpnPackage.lockdownEnabled is enabled. If set to VPN_LOCKDOWN_ENFORCED, the app is not
+  // allowed networking, and if set to VPN_LOCKDOWN_EXEMPTION, the app is allowed networking. Only
+  // supported on devices running Android 10 and above. If this is not supported by the device, the
+  // device will contain a NonComplianceDetail with non_compliance_reason set to API_LEVEL and a
+  // fieldPath. If this is not applicable to the app, the device will contain a NonComplianceDetail
+  // with non_compliance_reason set to UNSUPPORTED and a fieldPath. The fieldPath is set to
+  // applications[i].alwaysOnVpnLockdownExemption, where i is the index of the package in the
+  // applications policy.
+  AlwaysOnVpnLockdownExemption always_on_vpn_lockdown_exemption = 10;
+
+  // Optional. Whether the app is allowed to act as a credential provider on Android 14 and above.
+  CredentialProviderPolicy credential_provider_policy = 11;
+
+  // Optional. Specifies whether user control is permitted for the app. User control includes user
+  // actions like force-stopping and clearing app data. Certain types of apps have special
+  // treatment, see USER_CONTROL_SETTINGS_UNSPECIFIED and USER_CONTROL_ALLOWED for more details.
+  UserControlSettings user_control_settings = 12;
+
+  // Optional. ID of the preferential network the application uses. There must be a configuration
+  // for the specified network ID in preferentialNetworkServiceConfigs. If set to
+  // PREFERENTIAL_NETWORK_ID_UNSPECIFIED, the application will use the default network ID specified
+  // in defaultPreferentialNetworkId. See the documentation of defaultPreferentialNetworkId for the
+  // list of apps excluded from this defaulting. This applies on both work profiles and fully
+  // managed devices on Android 13 and above.
+  PreferentialNetworkId preferential_network_id = 13;
+
+  // Optional. Signing key certificates of the app.This field is required in the following cases:
+  // The app has installType set to CUSTOM (i.e. a custom app). The app has roles set to a nonempty
+  // list and the app does not exist on the Play Store. The app has extensionConfig set (i.e. an
+  // extension app) but ExtensionConfig.signingKeyFingerprintsSha256 (deprecated) is not set and the
+  // app does not exist on the Play Store.If this field is not set for a custom app, the policy is
+  // rejected. If it is not set when required for a non-custom app, a NonComplianceDetail with
+  // INVALID_VALUE is reported.For other cases, this field is optional and the signing key
+  // certificates obtained from Play Store are used.See following policy settings to see how this
+  // field is used: choosePrivateKeyRules ApplicationPolicy.InstallType.CUSTOM
+  // ApplicationPolicy.extensionConfig ApplicationPolicy.roles
+  repeated ApplicationSigningKeyCert signing_key_certs = 14;
+
+  enum DelegatedScope {
+    // No delegation scope specified.
+    DELEGATED_SCOPE_UNSPECIFIED = 0;
+
+    // Grants access to certificate installation and management. This scope can be delegated to
+    // multiple applications.
+    CERT_INSTALL           = 1;
+
+    // The managed configurations page (https://developers.google.com/android/management/managed-
+    // configurations-iframe).
+    MANAGED_CONFIGURATIONS = 2;
+
+    // Grants access to blocking uninstallation. This scope can be delegated to multiple
+    // applications.
+    BLOCK_UNINSTALL        = 3;
+
+    // Grants access to permission policy and permission grant state. This scope can be delegated to
+    // multiple applications.
+    PERMISSION_GRANT       = 4;
+
+    // Grants access to package access state. This scope can be delegated to multiple applications.
+    PACKAGE_ACCESS         = 5;
+
+    // Grants access for enabling system apps. This scope can be delegated to multiple applications.
+    ENABLE_SYSTEM_APP      = 6;
+
+    // Enable logging of on-device network events, such as DNS lookups and TCP connections. See
+    // UsageLogEvent for a complete description of the logged network events. Supported for fully
+    // managed devices on Android 8 and above. Supported for company-owned devices with a work
+    // profile on Android 12 and above, on which only network events from the work profile are
+    // logged. Can be overridden by the application delegated scope NETWORK_ACTIVITY_LOGS
+    NETWORK_ACTIVITY_LOGS  = 7;
+
+    // Enable logging of on-device security events, such as when the device password is incorrectly
+    // entered or removable storage is mounted. See UsageLogEvent for a complete description of the
+    // logged security events. Supported for fully managed devices on Android 7 and above. Supported
+    // for company-owned devices with a work profile on Android 12 and above, on which only security
+    // events from the work profile are logged. Can be overridden by the application delegated scope
+    // SECURITY_LOGS
+    SECURITY_LOGS          = 8;
+
+    // Grants access to selection of KeyChain certificates on behalf of requesting apps. Once
+    // granted, the delegated application will start receiving
+    // DelegatedAdminReceiver#onChoosePrivateKeyAlias (https://developer.android.com/reference/andro
+    // id/app/admin/DelegatedAdminReceiver#onChoosePrivateKeyAlias%28android.content.Context,%20andr
+    // oid.content.Intent,%20int,%20android.net.Uri,%20java.lang.String%29). Allows the delegated
+    // application to call grantKeyPairToApp (https://developer.android.com/reference/android/app/ad
+    // min/DevicePolicyManager#grantKeyPairToApp%28android.content.ComponentName,%20java.lang.String
+    // ,%20java.lang.String%29) and revokeKeyPairFromApp (https://developer.android.com/reference/an
+    // droid/app/admin/DevicePolicyManager#revokeKeyPairFromApp%28android.content.ComponentName,%20j
+    // ava.lang.String,%20java.lang.String%29) methods. This scope can be delegated to at most one
+    // application. choosePrivateKeyRules must be empty and privateKeySelectionEnabled has no effect
+    // if certificate selection is delegated to an application.
+    CERT_SELECTION         = 9;
+  }
+
+  enum AlwaysOnVpnLockdownExemption {
+    // Unspecified. Defaults to VPN_LOCKDOWN_ENFORCED.
+    ALWAYS_ON_VPN_LOCKDOWN_EXEMPTION_UNSPECIFIED = 0;
+
+    // The app respects the always-on VPN lockdown setting.
+    VPN_LOCKDOWN_ENFORCED  = 1;
+
+    // The app is exempt from the always-on VPN lockdown setting.
+    VPN_LOCKDOWN_EXEMPTION = 2;
+  }
+
+  enum CredentialProviderPolicy {
+    // Unspecified. The behaviour is governed by credentialProviderPolicyDefault.
+    CREDENTIAL_PROVIDER_POLICY_UNSPECIFIED = 0;
+
+    // App is allowed to act as a credential provider.
+    CREDENTIAL_PROVIDER_ALLOWED = 1;
+  }
+
+  enum UserControlSettings {
+    // Uses the default behaviour of the app to determine if user control is allowed or disallowed.
+    // User control is allowed by default for most apps but disallowed for following types of apps:
+    // extension apps (see extensionConfig for more details) kiosk apps (see KIOSK install type for
+    // more details) apps with roles set to a nonempty list other critical system apps
+    USER_CONTROL_SETTINGS_UNSPECIFIED = 0;
+
+    // User control is allowed for the app. Kiosk apps can use this to allow user control. For
+    // extension apps (see extensionConfig for more details), user control is disallowed even if
+    // this value is set.For apps with roles set to a nonempty list (except roles containing only
+    // KIOSK role), this value cannot be set.For kiosk apps (see KIOSK install type and KIOSK role
+    // type for more details), this value can be used to allow user control.
+    USER_CONTROL_ALLOWED    = 1;
+
+    // User control is disallowed for the app. This is supported on Android 11 and above. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 11.
+    USER_CONTROL_DISALLOWED = 2;
+  }
+}
+
+// The application signing key certificate.
+message ApplicationSigningKeyCert {
+  // Required. The SHA-256 hash value of the signing key certificate of the app. This must be a
+  // valid SHA-256 hash value, i.e. 32 bytes.
+  bytes signing_key_cert_fingerprint_sha256 = 1;
+}
+
+// Managed property.
+message ManagedProperty {
+  // The unique key that the app uses to identify the property, e.g.
+  // "com.google.android.gm.fieldname".
+  string key = 1;
+
+  oneof value {
+    // The value, for a string or choice restriction.
+    string string_value = 2;
+
+    // The value, for a boolean restriction.
+    bool   bool_value   = 3;
+
+    // The value, for an integer restriction.
+    int32  int_value    = 4;
+
+    // The value, for a multi-select restriction.
+    ManagedPropertyStringList  string_list_value  = 5;
+
+    // The value, for a bundle restriction.
+    ManagedPropertyBundle      bundle_value       = 6;
+
+    // The value, for a bundle array restriction.
+    ManagedPropertyBundleArray bundle_array_value = 7;
+  }
+}
+
+// A list of strings, for a multi-select managed property. A separate message because a proto3 oneof
+// cannot hold a repeated field.
+message ManagedPropertyStringList {
+  // The string values.
+  repeated string values = 1;
+}
+
+// A bundle of managed properties, for a bundle managed property.
+message ManagedPropertyBundle {
+  // The properties in the bundle. Keys must be unique within it.
+  repeated ManagedProperty properties = 1;
+}
+
+// A list of bundles, for a bundle array managed property.
+message ManagedPropertyBundleArray {
+  // The bundles in the array.
+  repeated ManagedPropertyBundle bundles = 1;
+}
+
+enum LocationMode {
+  // Defaults to LOCATION_USER_CHOICE.
+  LOCATION_MODE_UNSPECIFIED = 0;
+
+  // Location setting is not restricted on the device. No specific behavior is set or enforced.
+  LOCATION_USER_CHOICE = 1;
+
+  // Enable location setting on the device. Important: On Android 11 and above, work profiles on
+  // company-owned devices cannot directly enforce enabling of location services. When
+  // LOCATION_ENFORCED is set, then a NonComplianceDetail with USER_ACTION is reported. Compliance
+  // can only be restored once the user manually turns on location services through the device's
+  // Settings application.
+  LOCATION_ENFORCED = 2;
+
+  // Disable location setting on the device. Important: On Android 11 and above, work profiles on
+  // company-owned devices cannot directly enforce disabling of location services. When
+  // LOCATION_DISABLED is set, then a nonComplianceDetail with USER_ACTION is reported. Compliance
+  // can only be restored once the user manually turns off location services through the device's
+  // Settings application.
+  LOCATION_DISABLED = 3;
+}
+
+enum PrintingPolicy {
+  // Unspecified. Defaults to PRINTING_ALLOWED.
+  PRINTING_POLICY_UNSPECIFIED = 0;
+
+  // Printing is disallowed. A NonComplianceDetail with API_LEVEL is reported if the Android version
+  // is less than 9.
+  PRINTING_DISALLOWED = 1;
+
+  // Printing is allowed.
+  PRINTING_ALLOWED = 2;
+}
+
+enum CameraAccess {
+  // If camera_disabled is true, this is equivalent to CAMERA_ACCESS_DISABLED. Otherwise, this is
+  // equivalent to CAMERA_ACCESS_USER_CHOICE.
+  CAMERA_ACCESS_UNSPECIFIED = 0;
+
+  // The field camera_disabled is ignored. This is the default device behaviour: all cameras on the
+  // device are available. On Android 12 and above, the user can use the camera access toggle.
+  CAMERA_ACCESS_USER_CHOICE = 1;
+
+  // The field camera_disabled is ignored. All cameras on the device are disabled (for fully managed
+  // devices, this applies device-wide and for work profiles this applies only to the work
+  // profile).There are no explicit restrictions placed on the camera access toggle on Android 12
+  // and above: on fully managed devices, the camera access toggle has no effect as all cameras are
+  // disabled. On devices with a work profile, this toggle has no effect on apps in the work
+  // profile, but it affects apps outside the work profile.
+  CAMERA_ACCESS_DISABLED = 2;
+
+  // The field camera_disabled is ignored. All cameras on the device are available. On fully managed
+  // devices running Android 12 and above, the user is unable to use the camera access toggle. On
+  // devices which are not fully managed or which run Android 11 or below, this is equivalent to
+  // CAMERA_ACCESS_USER_CHOICE.
+  CAMERA_ACCESS_ENFORCED = 3;
+}
+
+enum MicrophoneAccess {
+  // If unmute_microphone_disabled is true, this is equivalent to MICROPHONE_ACCESS_DISABLED.
+  // Otherwise, this is equivalent to MICROPHONE_ACCESS_USER_CHOICE.
+  MICROPHONE_ACCESS_UNSPECIFIED = 0;
+
+  // The field unmute_microphone_disabled is ignored. This is the default device behaviour: the
+  // microphone on the device is available. On Android 12 and above, the user can use the microphone
+  // access toggle.
+  MICROPHONE_ACCESS_USER_CHOICE = 1;
+
+  // The field unmute_microphone_disabled is ignored. The microphone on the device is disabled (for
+  // fully managed devices, this applies device-wide).The microphone access toggle has no effect as
+  // the microphone is disabled.
+  MICROPHONE_ACCESS_DISABLED = 2;
+
+  // The field unmute_microphone_disabled is ignored. The microphone on the device is available. On
+  // devices running Android 12 and above, the user is unable to use the microphone access toggle.
+  // On devices which run Android 11 or below, this is equivalent to MICROPHONE_ACCESS_USER_CHOICE.
+  MICROPHONE_ACCESS_ENFORCED = 3;
+}
+
+enum AutoDateAndTimeZone {
+  // Unspecified. Defaults to AUTO_DATE_AND_TIME_ZONE_USER_CHOICE.
+  AUTO_DATE_AND_TIME_ZONE_UNSPECIFIED = 0;
+
+  // Auto date, time, and time zone are left to user's choice.
+  AUTO_DATE_AND_TIME_ZONE_USER_CHOICE = 1;
+
+  // Enforce auto date, time, and time zone on the device.
+  AUTO_DATE_AND_TIME_ZONE_ENFORCED = 2;
+}
+
+enum AssistContentPolicy {
+  // Unspecified. Defaults to ASSIST_CONTENT_ALLOWED.
+  ASSIST_CONTENT_POLICY_UNSPECIFIED = 0;
+
+  // Assist content is blocked from being sent to a privileged app.Supported on Android 15 and
+  // above. A NonComplianceDetail with API_LEVEL is reported if the Android version is less than 15.
+  ASSIST_CONTENT_DISALLOWED = 1;
+
+  // Assist content is allowed to be sent to a privileged app.Supported on Android 15 and above.
+  ASSIST_CONTENT_ALLOWED = 2;
+}
+
+enum EncryptionPolicy {
+  // This value is ignored, i.e. no encryption required
+  ENCRYPTION_POLICY_UNSPECIFIED = 0;
+
+  // Encryption required but no password required to boot
+  ENABLED_WITHOUT_PASSWORD = 1;
+
+  // Encryption required with password required to boot
+  ENABLED_WITH_PASSWORD = 2;
+}
+
+enum MtePolicy {
+  // Unspecified. Defaults to MTE_USER_CHOICE.
+  MTE_POLICY_UNSPECIFIED = 0;
+
+  // The user can choose to enable or disable MTE on the device if the device supports this.
+  MTE_USER_CHOICE = 1;
+
+  // Memory Tagging Extension is enabled and the user cannot change it. The device reboots to apply
+  // the change.
+  MTE_ENABLED = 2;
+
+  // MTE is disabled on the device and the user is not allowed to change this setting. This applies
+  // only on fully managed devices. In other cases, a NonComplianceDetail with MANAGEMENT_MODE is
+  // reported. A NonComplianceDetail with DEVICE_INCOMPATIBLE is reported if the device does not
+  // support MTE.Supported on Android 14 and above. A NonComplianceDetail with API_LEVEL is reported
+  // if the Android version is less than 14.
+  MTE_DISABLED = 3;
+}
+
+enum CredentialProviderPolicyDefault {
+  // Unspecified. Defaults to CREDENTIAL_PROVIDER_DEFAULT_DISALLOWED.
+  CREDENTIAL_PROVIDER_POLICY_DEFAULT_UNSPECIFIED = 0;
+
+  // Apps with credentialProviderPolicy unspecified are not allowed to act as a credential provider.
+  CREDENTIAL_PROVIDER_DEFAULT_DISALLOWED = 1;
+
+  // Apps with credentialProviderPolicy unspecified are not allowed to act as a credential provider
+  // except for the OEM default credential providers. OEM default credential providers are always
+  // allowed to act as credential providers.
+  CREDENTIAL_PROVIDER_DEFAULT_DISALLOWED_EXCEPT_SYSTEM = 2;
+
+  // Apps with credentialProviderPolicy unspecified are allowed to act as a credential provider.
+  CREDENTIAL_PROVIDER_DEFAULT_ALLOWED = 3;
+}
+
+// Advanced security settings. In most cases, setting these is not needed.
+message AdvancedSecurityOverrides {
+  enum UntrustedAppsPolicy {
+    // Unspecified. Defaults to DISALLOW_INSTALL.
+    UNTRUSTED_APPS_POLICY_UNSPECIFIED = 0;
+
+    // Default. Disallow untrusted app installs on entire device.
+    DISALLOW_INSTALL = 1;
+
+    // Allow untrusted app installs on entire device.
+    ALLOW_INSTALL_DEVICE_WIDE = 2;
+  }
+  enum GooglePlayProtectVerifyApps {
+    // Unspecified. Defaults to VERIFY_APPS_ENFORCED.
+    GOOGLE_PLAY_PROTECT_VERIFY_APPS_UNSPECIFIED = 0;
+
+    // Default. Force-enables app verification.
+    VERIFY_APPS_ENFORCED = 1;
+
+    // Allows the user to choose whether to enable app verification.
+    VERIFY_APPS_USER_CHOICE = 2;
+  }
+  enum DeveloperSettings {
+    // Unspecified. Defaults to DEVELOPER_SETTINGS_DISABLED.
+    DEVELOPER_SETTINGS_UNSPECIFIED = 0;
+
+    // Default. Disables all developer settings and prevents the user from accessing them.
+    DEVELOPER_SETTINGS_DISABLED = 1;
+
+    // Allows all developer settings. The user can access and optionally configure the settings.
+    DEVELOPER_SETTINGS_ALLOWED = 2;
+  }
+  enum CommonCriteriaMode {
+    // Unspecified. Defaults to COMMON_CRITERIA_MODE_DISABLED.
+    COMMON_CRITERIA_MODE_UNSPECIFIED = 0;
+
+    // Default. Disables Common Criteria Mode.
+    COMMON_CRITERIA_MODE_DISABLED = 1;
+
+    // Enables Common Criteria Mode.
+    COMMON_CRITERIA_MODE_ENABLED = 2;
+  }
+
+  // The policy for untrusted apps (apps from unknown sources) enforced on the device. Replaces
+  // install_unknown_sources_allowed (deprecated).
+  UntrustedAppsPolicy untrusted_apps_policy = 1;
+
+  // Whether Google Play Protect verification (https://support.google.com/accounts/answer/2812853)
+  // is enforced. Replaces ensureVerifyAppsEnabled (deprecated).
+  GooglePlayProtectVerifyApps google_play_protect_verify_apps = 2;
+
+  // Controls access to developer settings: developer options and safe boot. Replaces
+  // safeBootDisabled (deprecated) and debuggingFeaturesAllowed (deprecated). On personally-owned
+  // devices with a work profile, setting this policy will not disable safe boot. In this case, a
+  // NonComplianceDetail with MANAGEMENT_MODE is reported.
+  DeveloperSettings developer_settings = 3;
+
+  // Controls Common Criteria Mode—security standards defined in the Common Criteria for Information
+  // Technology Security Evaluation (https://www.commoncriteriaportal.org/) (CC). Enabling Common
+  // Criteria Mode increases certain security components on a device, see CommonCriteriaMode for
+  // details.Warning: Common Criteria Mode enforces a strict security model typically only required
+  // for IT products used in national security systems and other highly sensitive organizations.
+  // Standard device use may be affected. Only enabled if required. If Common Criteria Mode is
+  // turned off after being enabled previously, all user-configured Wi-Fi networks may be lost and
+  // any enterprise-configured Wi-Fi networks that require user input may need to be reconfigured.
+  CommonCriteriaMode common_criteria_mode = 4;
+}
+
+// Controls for device radio settings.
+message DeviceRadioState {
+  enum WifiState {
+    // Unspecified. Defaults to WIFI_STATE_USER_CHOICE
+    WIFI_STATE_UNSPECIFIED = 0;
+
+    // User is allowed to enable/disable Wi-Fi.
+    WIFI_STATE_USER_CHOICE = 1;
+
+    // Wi-Fi is on and the user is not allowed to turn it off. A NonComplianceDetail with API_LEVEL
+    // is reported if the Android version is less than 13.
+    WIFI_ENABLED = 2;
+
+    // Wi-Fi is off and the user is not allowed to turn it on. A NonComplianceDetail with API_LEVEL
+    // is reported if the Android version is less than 13.
+    WIFI_DISABLED = 3;
+  }
+  enum AirplaneModeState {
+    // Unspecified. Defaults to AIRPLANE_MODE_USER_CHOICE.
+    AIRPLANE_MODE_STATE_UNSPECIFIED = 0;
+
+    // The user is allowed to toggle airplane mode on or off.
+    AIRPLANE_MODE_USER_CHOICE = 1;
+
+    // Airplane mode is disabled. The user is not allowed to toggle airplane mode on. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 9.
+    AIRPLANE_MODE_DISABLED = 2;
+  }
+  enum UltraWidebandState {
+    // Unspecified. Defaults to ULTRA_WIDEBAND_USER_CHOICE.
+    ULTRA_WIDEBAND_STATE_UNSPECIFIED = 0;
+
+    // The user is allowed to toggle ultra wideband on or off.
+    ULTRA_WIDEBAND_USER_CHOICE = 1;
+
+    // Ultra wideband is disabled. The user is not allowed to toggle ultra wideband on via settings.
+    // A NonComplianceDetail with API_LEVEL is reported if the Android version is less than 14.
+    ULTRA_WIDEBAND_DISABLED = 2;
+  }
+  enum CellularTwoGState {
+    // Unspecified. Defaults to CELLULAR_TWO_G_USER_CHOICE.
+    CELLULAR_TWO_G_STATE_UNSPECIFIED = 0;
+
+    // The user is allowed to toggle cellular 2G on or off.
+    CELLULAR_TWO_G_USER_CHOICE = 1;
+
+    // Cellular 2G is disabled. The user is not allowed to toggle cellular 2G on via settings. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 14.
+    CELLULAR_TWO_G_DISABLED = 2;
+  }
+  enum MinimumWifiSecurityLevel {
+    // The device will be able to connect to all types of Wi-Fi networks.
+    OPEN_NETWORK_SECURITY = 0;
+
+    // A personal network such as WEP, WPA2-PSK is the minimum required security. The device will
+    // not be able to connect to open wifi networks. This is stricter than OPEN_NETWORK_SECURITY. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 13.
+    PERSONAL_NETWORK_SECURITY = 1;
+
+    // An enterprise EAP network is the minimum required security level. The device will not be able
+    // to connect to Wi-Fi network below this security level. This is stricter than
+    // PERSONAL_NETWORK_SECURITY. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 13.
+    ENTERPRISE_NETWORK_SECURITY = 2;
+
+    // A 192-bit enterprise network is the minimum required security level. The device will not be
+    // able to connect to Wi-Fi network below this security level. This is stricter than
+    // ENTERPRISE_NETWORK_SECURITY. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 13.
+    ENTERPRISE_BIT192_NETWORK_SECURITY = 3;
+  }
+
+  // Optional. Controls current state of Wi-Fi and if user can change its state.
+  WifiState wifi_state = 1;
+
+  // Optional. Controls whether airplane mode can be toggled by the user or not.
+  AirplaneModeState airplane_mode_state = 2;
+
+  // Optional. Controls the state of the ultra wideband setting and whether the user can toggle it
+  // on or off.
+  UltraWidebandState ultra_wideband_state = 3;
+
+  // Optional. Controls whether cellular 2G setting can be toggled by the user or not.
+  CellularTwoGState cellular_two_g_state = 4;
+
+  // Optional. The minimum required security level of Wi-Fi networks that the device can connect to.
+  MinimumWifiSecurityLevel minimum_wifi_security_level = 5;
+}
+
+// Represents a Wi-Fi SSID.
+message WifiSsid {
+  // Required. Wi-Fi SSID represented as a string.
+  string wifi_ssid = 1;
+}
+
+// Restrictions on which Wi-Fi SSIDs the device can connect to. Note that this does not affect which
+// networks can be configured on the device. Supported on company-owned devices running Android 13
+// and above.
+message WifiSsidPolicy {
+  enum WifiSsidPolicyType {
+    // Defaults to WIFI_SSID_DENYLIST. wifiSsids must not be set. There are no restrictions on which
+    // SSID the device can connect to.
+    WIFI_SSID_POLICY_TYPE_UNSPECIFIED = 0;
+
+    // The device cannot connect to any Wi-Fi network whose SSID is in wifiSsids, but can connect to
+    // other networks.
+    WIFI_SSID_DENYLIST = 1;
+
+    // The device can make Wi-Fi connections only to the SSIDs in wifiSsids. wifiSsids must not be
+    // empty. The device will not be able to connect to any other Wi-Fi network.
+    WIFI_SSID_ALLOWLIST = 2;
+  }
+  // Type of the Wi-Fi SSID policy to be applied.
+  WifiSsidPolicyType wifi_ssid_policy_type = 1;
+
+  // Optional. List of Wi-Fi SSIDs that should be applied in the policy. This field must be non-
+  // empty when WifiSsidPolicyType is set to WIFI_SSID_ALLOWLIST. If this is set to a non-empty
+  // list, then a NonComplianceDetail detail with API_LEVEL is reported if the Android version is
+  // less than 13 and a NonComplianceDetail with MANAGEMENT_MODE is reported for non-company-owned
+  // devices.
+  repeated WifiSsid wifi_ssids = 2;
+}
+
+// Covers controls for device connectivity such as Wi-Fi, USB data access, keyboard/mouse
+// connections, and more.
+message DeviceConnectivityManagement {
+  enum UsbDataAccess {
+    // Unspecified. Defaults to DISALLOW_USB_FILE_TRANSFER.
+    USB_DATA_ACCESS_UNSPECIFIED = 0;
+
+    // All types of USB data transfers are allowed. usbFileTransferDisabled is ignored.
+    ALLOW_USB_DATA_TRANSFER = 1;
+
+    // Transferring files over USB is disallowed. Other types of USB data connections, such as mouse
+    // and keyboard connection, are allowed. usbFileTransferDisabled is ignored.
+    DISALLOW_USB_FILE_TRANSFER = 2;
+
+    // When set, all types of USB data transfers are prohibited. Supported for devices running
+    // Android 12 or above with USB HAL 1.3 or above. If the setting is not supported,
+    // DISALLOW_USB_FILE_TRANSFER will be set. A NonComplianceDetail with API_LEVEL is reported if
+    // the Android version is less than 12. A NonComplianceDetail with DEVICE_INCOMPATIBLE is
+    // reported if the device does not have USB HAL 1.3 or above. usbFileTransferDisabled is
+    // ignored.
+    DISALLOW_USB_DATA_TRANSFER = 3;
+  }
+  enum ConfigureWifi {
+    // Unspecified. Defaults to ALLOW_CONFIGURING_WIFI unless wifiConfigDisabled is set to true. If
+    // wifiConfigDisabled is set to true, this is equivalent to DISALLOW_CONFIGURING_WIFI.
+    CONFIGURE_WIFI_UNSPECIFIED = 0;
+
+    // The user is allowed to configure Wi-Fi. wifiConfigDisabled is ignored.
+    ALLOW_CONFIGURING_WIFI = 1;
+
+    // Adding new Wi-Fi configurations is disallowed. The user is only able to switch between
+    // already configured networks. Supported on Android 13 and above, on fully managed devices and
+    // work profiles on company-owned devices. If the setting is not supported,
+    // ALLOW_CONFIGURING_WIFI is set. A NonComplianceDetail with API_LEVEL is reported if the
+    // Android version is less than 13. wifiConfigDisabled is ignored.
+    DISALLOW_ADD_WIFI_CONFIG = 2;
+
+    // Disallows configuring Wi-Fi networks. The setting wifiConfigDisabled is ignored when this
+    // value is set. Supported on fully managed devices and work profile on company-owned devices,
+    // on all supported API levels. For fully managed devices, setting this removes all configured
+    // networks and retains only the networks configured using openNetworkConfiguration policy. For
+    // work profiles on company-owned devices, existing configured networks are not affected and the
+    // user is not allowed to add, remove, or modify Wi-Fi networks. Note: If a network connection
+    // can't be made at boot time and configuring Wi-Fi is disabled then network escape hatch will
+    // be shown in order to refresh the device policy (see networkEscapeHatchEnabled).
+    DISALLOW_CONFIGURING_WIFI = 3;
+  }
+  enum WifiDirectSettings {
+    // Unspecified. Defaults to ALLOW_WIFI_DIRECT
+    WIFI_DIRECT_SETTINGS_UNSPECIFIED = 0;
+
+    // The user is allowed to use Wi-Fi direct.
+    ALLOW_WIFI_DIRECT = 1;
+
+    // The user is not allowed to use Wi-Fi direct. A NonComplianceDetail with API_LEVEL is reported
+    // if the Android version is less than 13.
+    DISALLOW_WIFI_DIRECT = 2;
+  }
+  enum TetheringSettings {
+    // Unspecified. Defaults to ALLOW_ALL_TETHERING unless tetheringConfigDisabled is set to true.
+    // If tetheringConfigDisabled is set to true, this is equivalent to DISALLOW_ALL_TETHERING.
+    TETHERING_SETTINGS_UNSPECIFIED = 0;
+
+    // Allows configuration and use of all forms of tethering. tetheringConfigDisabled is ignored.
+    ALLOW_ALL_TETHERING = 1;
+
+    // Disallows the user from using Wi-Fi tethering. Supported on company owned devices running
+    // Android 13 and above. If the setting is not supported, ALLOW_ALL_TETHERING will be set. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 13.
+    // tetheringConfigDisabled is ignored.
+    DISALLOW_WIFI_TETHERING = 2;
+
+    // Disallows all forms of tethering. Supported on fully managed devices and work profile on
+    // company-owned devices, on all supported android versions. The setting tetheringConfigDisabled
+    // is ignored.
+    DISALLOW_ALL_TETHERING = 3;
+  }
+  enum BluetoothSharing {
+    // Unspecified. Defaults to BLUETOOTH_SHARING_DISALLOWED on work profiles and
+    // BLUETOOTH_SHARING_ALLOWED on fully managed devices.
+    BLUETOOTH_SHARING_UNSPECIFIED = 0;
+
+    // Bluetooth sharing is allowed.Supported on Android 8 and above. A NonComplianceDetail with
+    // API_LEVEL is reported on work profiles if the Android version is less than 8.
+    BLUETOOTH_SHARING_ALLOWED = 1;
+
+    // Bluetooth sharing is disallowed.Supported on Android 8 and above. A NonComplianceDetail with
+    // API_LEVEL is reported on fully managed devices if the Android version is less than 8.
+    BLUETOOTH_SHARING_DISALLOWED = 2;
+  }
+
+  // Controls what files and/or data can be transferred via USB. Supported only on company-owned
+  // devices.
+  UsbDataAccess usb_data_access = 1;
+
+  // Controls Wi-Fi configuring privileges. Based on the option set, user will have either full or
+  // limited or no control in configuring Wi-Fi networks.
+  ConfigureWifi configure_wifi = 2;
+
+  // Controls configuring and using Wi-Fi direct settings. Supported on company-owned devices
+  // running Android 13 and above.
+  WifiDirectSettings wifi_direct_settings = 3;
+
+  // Controls tethering settings. Based on the value set, the user is partially or fully disallowed
+  // from using different forms of tethering.
+  TetheringSettings tethering_settings = 4;
+
+  // Restrictions on which Wi-Fi SSIDs the device can connect to. Note that this does not affect
+  // which networks can be configured on the device. Supported on company-owned devices running
+  // Android 13 and above.
+  WifiSsidPolicy wifi_ssid_policy = 5;
+
+  // Optional. Wi-Fi roaming policy.
+  WifiRoamingPolicy wifi_roaming_policy = 6;
+
+  // Optional. Controls whether Bluetooth sharing is allowed.
+  BluetoothSharing bluetooth_sharing = 7;
+
+  // Optional. Access Point Name (APN) policy. Configuration for Access Point Names (APNs) which may
+  // override any other APNs on the device. See OVERRIDE_APNS_ENABLED and overrideApns for details.
+  ApnPolicy apn_policy = 8;
+
+  // Optional. The global private DNS settings.
+  PrivateDnsSettings private_dns_settings = 9;
+
+  // Optional. Preferential network service configuration. Setting this field will override
+  // preferentialNetworkService. This can be set on both work profiles and fully managed devices on
+  // Android 13 and above. See 5G network slicing
+  // (https://developers.google.com/android/management/5g-network-slicing) guide for more details.
+  PreferentialNetworkServiceSettings preferential_network_service_settings = 10;
+}
+
+// Wi-Fi roaming policy.
+message WifiRoamingPolicy {
+  // Optional. Wi-Fi roaming settings. SSIDs provided in this list must be unique, the policy will
+  // be rejected otherwise.
+  repeated WifiRoamingSetting wifi_roaming_settings = 1;
+}
+
+// Wi-Fi roaming setting.
+message WifiRoamingSetting {
+  enum WifiRoamingMode {
+    // Unspecified. Defaults to WIFI_ROAMING_DEFAULT.
+    WIFI_ROAMING_MODE_UNSPECIFIED = 0;
+
+    // Wi-Fi roaming is disabled. Supported on Android 15 and above on fully managed devices and
+    // work profiles on company-owned devices. A NonComplianceDetail with MANAGEMENT_MODE is
+    // reported for other management modes. A NonComplianceDetail with API_LEVEL is reported if the
+    // Android version is less than 15.
+    WIFI_ROAMING_DISABLED = 1;
+
+    // Default Wi-Fi roaming mode of the device.
+    WIFI_ROAMING_DEFAULT = 2;
+
+    // Aggressive roaming mode which allows quicker Wi-Fi roaming. Supported on Android 15 and above
+    // on fully managed devices and work profiles on company-owned devices. A NonComplianceDetail
+    // with MANAGEMENT_MODE is reported for other management modes. A NonComplianceDetail with
+    // API_LEVEL is reported if the Android version is less than 15. A NonComplianceDetail with
+    // DEVICE_INCOMPATIBLE is reported if the device does not support aggressive roaming mode.
+    WIFI_ROAMING_AGGRESSIVE = 3;
+  }
+  // Required. SSID of the Wi-Fi network.
+  string wifi_ssid = 1;
+
+  // Required. Wi-Fi roaming mode for the specified SSID.
+  WifiRoamingMode wifi_roaming_mode = 2;
+}
+
+// Controls the device's private DNS settings.
+message PrivateDnsSettings {
+  enum PrivateDnsMode {
+    // Unspecified. Defaults to PRIVATE_DNS_USER_CHOICE.
+    PRIVATE_DNS_MODE_UNSPECIFIED = 0;
+
+    // The user is allowed to configure private DNS.
+    PRIVATE_DNS_USER_CHOICE = 1;
+
+    // Automatic private DNS mode. The device tries to use the network-provided DNS server over an
+    // encrypted connection before resorting to cleartext. The user is not allowed to modify this
+    // setting. Supported on Android 10 and above on fully managed devices and work profiles on
+    // company-owned devices. A NonComplianceDetail with MANAGEMENT_MODE is reported on other
+    // management modes. A NonComplianceDetail with API_LEVEL is reported if the Android version is
+    // less than 10. A NonComplianceDetail with INVALID_VALUE is reported if setting this fails for
+    // any other reason.Note: For work profiles on company-owned devices, setting this mode prevents
+    // the user from changing the setting, but the active private DNS setting is not modified. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported in this case.
+    PRIVATE_DNS_AUTOMATIC = 2;
+
+    // The device only uses the DNS server specified in private_dns_host. The user is not allowed to
+    // modify this setting. If this is set, then private_dns_host must be set. Supported on Android
+    // 10 and above on fully managed devices. A NonComplianceDetail with MANAGEMENT_MODE is reported
+    // on other management modes. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 10.
+    PRIVATE_DNS_SPECIFIED_HOST = 3;
+  }
+  // Optional. The configuration mode for device's global private DNS settings. If this is set to
+  // PRIVATE_DNS_SPECIFIED_HOST, then private_dns_host must be set.
+  PrivateDnsMode private_dns_mode = 1;
+
+  // Optional. The hostname of the DNS server. This must be set if and only if private_dns_mode is
+  // set to PRIVATE_DNS_SPECIFIED_HOST. Supported on Android 10 and above on fully managed devices.
+  // A NonComplianceDetail with MANAGEMENT_MODE is reported on other management modes. A
+  // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 10. A
+  // NonComplianceDetail with PENDING is reported if the device is not connected to a network. A
+  // NonComplianceDetail with nonComplianceReason INVALID_VALUE and specificNonComplianceReason
+  // PRIVATE_DNS_HOST_NOT_SERVING is reported if the specified host is not a DNS server or not
+  // supported on Android. A NonComplianceDetail with INVALID_VALUE is reported if applying this
+  // setting fails for any other reason.
+  string private_dns_host = 2;
+}
+
+enum PreferentialNetworkService {
+  // Unspecified. Defaults to PREFERENTIAL_NETWORK_SERVICES_DISABLED.
+  PREFERENTIAL_NETWORK_SERVICE_UNSPECIFIED = 0;
+
+  // Preferential network service is disabled on the work profile.
+  PREFERENTIAL_NETWORK_SERVICE_DISABLED = 1;
+
+  // Preferential network service is enabled on the work profile. This setting is only supported on
+  // work profiles on devices running Android 12 or above. Starting with Android 13, fully managed
+  // devices are also supported.
+  PREFERENTIAL_NETWORK_SERVICE_ENABLED = 2;
+}
+
+// Preferential network service settings.
+message PreferentialNetworkServiceSettings {
+  // Required. Default preferential network ID for the applications that are not in applications or
+  // if ApplicationPolicy.preferentialNetworkId is set to PREFERENTIAL_NETWORK_ID_UNSPECIFIED. There
+  // must be a configuration for the specified network ID in preferentialNetworkServiceConfigs,
+  // unless this is set to NO_PREFERENTIAL_NETWORK. If set to PREFERENTIAL_NETWORK_ID_UNSPECIFIED or
+  // unset, this defaults to NO_PREFERENTIAL_NETWORK. Note: If the default preferential network is
+  // misconfigured, applications with no ApplicationPolicy.preferentialNetworkId set are not able to
+  // access the internet. This setting does not apply to the following critical apps:
+  // com.google.android.apps.work.clouddpc
+  // com.google.android.gmsApplicationPolicy.preferentialNetworkId can still be used to configure
+  // the preferential network for them.
+  PreferentialNetworkId default_preferential_network_id = 1;
+
+  // Required. Preferential network service configurations which enables having multiple enterprise
+  // slices. There must not be multiple configurations with the same preferentialNetworkId. If a
+  // configuration is not referenced by any application by setting
+  // ApplicationPolicy.preferentialNetworkId or by setting defaultPreferentialNetworkId, it will be
+  // ignored. For devices on 4G networks, enterprise APN needs to be configured additionally to set
+  // up data call for preferential network service. These APNs can be added using apnPolicy.
+  repeated PreferentialNetworkServiceConfig preferential_network_service_configs = 2;
+}
+
+// Individual preferential network service configuration.
+message PreferentialNetworkServiceConfig {
+  enum NonMatchingNetworks {
+    // Unspecified. Defaults to NON_MATCHING_NETWORKS_ALLOWED.
+    NON_MATCHING_NETWORKS_UNSPECIFIED = 0;
+
+    // Apps this configuration applies to are allowed to use networks other than the preferential
+    // service.
+    NON_MATCHING_NETWORKS_ALLOWED = 1;
+
+    // Apps this configuration applies to are disallowed from using other networks than the
+    // preferential service. This can be set on Android 14 and above. A NonComplianceDetail with
+    // API_LEVEL is reported if the Android version is less than 14. If this is set,
+    // fallbackToDefaultConnection must be set to FALLBACK_TO_DEFAULT_CONNECTION_DISALLOWED, the
+    // policy will be rejected otherwise.
+    NON_MATCHING_NETWORKS_DISALLOWED = 2;
+  }
+  enum FallbackToDefaultConnection {
+    // Unspecified. Defaults to FALLBACK_TO_DEFAULT_CONNECTION_ALLOWED.
+    FALLBACK_TO_DEFAULT_CONNECTION_UNSPECIFIED = 0;
+
+    // Fallback to default connection is allowed. If this is set, nonMatchingNetworks must not be
+    // set to NON_MATCHING_NETWORKS_DISALLOWED, the policy will be rejected otherwise.
+    FALLBACK_TO_DEFAULT_CONNECTION_ALLOWED = 1;
+
+    // Fallback to default connection is not allowed.
+    FALLBACK_TO_DEFAULT_CONNECTION_DISALLOWED = 2;
+  }
+  // Required. Preferential network identifier. This must not be set to NO_PREFERENTIAL_NETWORK or
+  // PREFERENTIAL_NETWORK_ID_UNSPECIFIED, the policy will be rejected otherwise.
+  PreferentialNetworkId preferential_network_id = 1;
+
+  // Optional. Whether apps this configuration applies to are blocked from using networks other than
+  // the preferential service. If this is set to NON_MATCHING_NETWORKS_DISALLOWED, then
+  // fallbackToDefaultConnection must be set to FALLBACK_TO_DEFAULT_CONNECTION_DISALLOWED.
+  NonMatchingNetworks non_matching_networks = 2;
+
+  // Optional. Whether fallback to the device-wide default network is allowed. If this is set to
+  // FALLBACK_TO_DEFAULT_CONNECTION_ALLOWED, then nonMatchingNetworks must not be set to
+  // NON_MATCHING_NETWORKS_DISALLOWED, the policy will be rejected otherwise. Note: If this is set
+  // to FALLBACK_TO_DEFAULT_CONNECTION_DISALLOWED, applications are not able to access the internet
+  // if the 5G slice is not available.
+  FallbackToDefaultConnection fallback_to_default_connection = 3;
+}
+
+enum PreferentialNetworkId {
+  // Whether this value is valid and what it means depends on where it is used, and this is
+  // documented on the relevant fields.
+  PREFERENTIAL_NETWORK_ID_UNSPECIFIED = 0;
+
+  // Application does not use any preferential network.
+  NO_PREFERENTIAL_NETWORK = 1;
+
+  // Preferential network identifier 1.
+  PREFERENTIAL_NETWORK_ID_ONE = 2;
+
+  // Preferential network identifier 2.
+  PREFERENTIAL_NETWORK_ID_TWO = 3;
+
+  // Preferential network identifier 3.
+  PREFERENTIAL_NETWORK_ID_THREE = 4;
+
+  // Preferential network identifier 4.
+  PREFERENTIAL_NETWORK_ID_FOUR = 5;
+
+  // Preferential network identifier 5.
+  PREFERENTIAL_NETWORK_ID_FIVE = 6;
+}
+
+// Access Point Name (APN) policy. Configuration for Access Point Names (APNs) which may override
+// any other APNs on the device. See OVERRIDE_APNS_ENABLED and overrideApns for details.
+message ApnPolicy {
+  enum OverrideApns {
+    // Unspecified. Defaults to OVERRIDE_APNS_DISABLED.
+    OVERRIDE_APNS_UNSPECIFIED = 0;
+
+    // Override APNs disabled. Any configured apnSettings are saved on the device, but are disabled
+    // and have no effect. Any other APNs on the device remain in use.
+    OVERRIDE_APNS_DISABLED = 1;
+
+    // Override APNs enabled. Only override APNs are in use, any other APNs are ignored. This can
+    // only be set on fully managed devices on Android 10 and above. For work profiles override APNs
+    // are enabled via preferentialNetworkServiceSettings and this value cannot be set. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 10. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    OVERRIDE_APNS_ENABLED = 2;
+  }
+  // Optional. Whether override APNs are disabled or enabled. See
+  // DevicePolicyManager.setOverrideApnsEnabled (https://developer.android.com/reference/android/app
+  // /admin/DevicePolicyManager#setOverrideApnsEnabled) for more details.
+  OverrideApns override_apns = 1;
+
+  // Optional. APN settings for override APNs. There must not be any conflict between any of APN
+  // settings provided, otherwise the policy will be rejected. Two ApnSettings are considered to
+  // conflict when all of the following fields match on both: numericOperatorId, apn, proxyAddress,
+  // proxyPort, mmsProxyAddress, mmsProxyPort, mmsc, mvnoType, protocol, roamingProtocol. If some of
+  // the APN settings result in non-compliance of INVALID_VALUE , they will be ignored. This can be
+  // set on fully managed devices on Android 10 and above. This can also be set on work profiles on
+  // Android 13 and above and only with ApnSetting's with ENTERPRISE APN type. A NonComplianceDetail
+  // with API_LEVEL is reported if the Android version is less than 10. A NonComplianceDetail with
+  // MANAGEMENT_MODE is reported for work profiles on Android versions less than 13.
+  repeated ApnSetting apn_settings = 2;
+}
+
+// An Access Point Name (APN) configuration for a carrier data connection. The APN provides
+// configuration to connect a cellular network device to an IP data network. A carrier uses this
+// setting to decide which IP address to assign, any security methods to apply, and how the device
+// might be connected to private networks.
+message ApnSetting {
+  enum Protocol {
+    // The protocol is not specified.
+    PROTOCOL_UNSPECIFIED = 0;
+
+    // Internet protocol.
+    IP = 1;
+
+    // Virtual PDP type introduced to handle dual IP stack UE capability.
+    IPV4V6 = 2;
+
+    // Internet protocol, version 6.
+    IPV6 = 3;
+
+    // Transfer of Non-IP data to external packet data network.
+    NON_IP = 4;
+
+    // Point to point protocol.
+    PPP = 5;
+
+    // Transfer of Unstructured data to the Data Network via N6.
+    UNSTRUCTURED = 6;
+  }
+  enum ApnType {
+    // Unspecified. This value is not used.
+    APN_TYPE_UNSPECIFIED = 0;
+
+    // APN type for enterprise traffic. Supported on Android 13 and above. A NonComplianceDetail
+    // with API_LEVEL is reported if the Android version is less than 13.
+    ENTERPRISE = 1;
+
+    // APN type for BIP (Bearer Independent Protocol). This can only be set on fully managed devices
+    // on Android 12 and above. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 12. A NonComplianceDetail with MANAGEMENT_MODE is reported for work
+    // profiles.
+    BIP = 2;
+
+    // APN type for CBS (Carrier Branded Services). This can only be set on fully managed devices. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    CBS = 3;
+
+    // APN type for default data traffic. This can only be set on fully managed devices. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    DEFAULT = 4;
+
+    // APN type for DUN (Dial-up networking) traffic. This can only be set on fully managed devices.
+    // A NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    DUN = 5;
+
+    // APN type for Emergency PDN. This is not an IA apn, but is used for access to carrier services
+    // in an emergency call situation. This can only be set on fully managed devices. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    EMERGENCY = 6;
+
+    // APN type for accessing the carrier's FOTA (Firmware Over-the-Air) portal, used for over the
+    // air updates. This can only be set on fully managed devices. A NonComplianceDetail with
+    // MANAGEMENT_MODE is reported for work profiles.
+    FOTA = 7;
+
+    // APN type for HiPri (high-priority) traffic. This can only be set on fully managed devices. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    HIPRI = 8;
+
+    // APN type for IA (Initial Attach) APN. This can only be set on fully managed devices. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    IA = 9;
+
+    // APN type for IMS (IP Multimedia Subsystem) traffic. This can only be set on fully managed
+    // devices. A NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    IMS = 10;
+
+    // APN type for MCX (Mission Critical Service) where X can be PTT/Video/Data. This can only be
+    // set on fully managed devices. A NonComplianceDetail with MANAGEMENT_MODE is reported for work
+    // profiles.
+    MCX = 11;
+
+    // APN type for MMS (Multimedia Messaging Service) traffic. This can only be set on fully
+    // managed devices. A NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    MMS = 12;
+
+    // APN type for RCS (Rich Communication Services). This can only be set on fully managed devices
+    // on Android 15 and above. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 15. A NonComplianceDetail with MANAGEMENT_MODE is reported for work
+    // profiles.
+    RCS = 13;
+
+    // APN type for SUPL (Secure User Plane Location) assisted GPS. This can only be set on fully
+    // managed devices. A NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    SUPL = 14;
+
+    // APN type for VSIM (Virtual SIM) service. This can only be set on fully managed devices on
+    // Android 12 and above. A NonComplianceDetail with API_LEVEL is reported if the Android version
+    // is less than 12. A NonComplianceDetail with MANAGEMENT_MODE is reported for work profiles.
+    VSIM = 15;
+
+    // APN type for XCAP (XML Configuration Access Protocol) traffic. This can only be set on fully
+    // managed devices on Android 11 and above. A NonComplianceDetail with API_LEVEL is reported if
+    // the Android version is less than 11. A NonComplianceDetail with MANAGEMENT_MODE is reported
+    // for work profiles.
+    XCAP = 16;
+  }
+  enum AuthType {
+    // Unspecified. If username is empty, defaults to NONE. Otherwise, defaults to PAP_OR_CHAP.
+    AUTH_TYPE_UNSPECIFIED = 0;
+
+    // Authentication is not required.
+    NONE = 1;
+
+    // Authentication type for PAP.
+    PAP = 2;
+
+    // Authentication type for CHAP.
+    CHAP = 3;
+
+    // Authentication type for PAP or CHAP.
+    PAP_OR_CHAP = 4;
+  }
+  enum MvnoType {
+    // The MVNO type is not specified.
+    MVNO_TYPE_UNSPECIFIED = 0;
+
+    // MVNO type for group identifier level 1.
+    GID = 1;
+
+    // MVNO type for ICCID.
+    ICCID = 2;
+
+    // MVNO type for IMSI.
+    IMSI = 3;
+
+    // MVNO type for SPN (service provider name).
+    SPN = 4;
+  }
+  enum NetworkType {
+    // Unspecified. This value must not be used.
+    NETWORK_TYPE_UNSPECIFIED = 0;
+
+    // Radio technology EDGE.
+    EDGE = 1;
+
+    // Radio technology GPRS.
+    GPRS = 2;
+
+    // Radio technology GSM.
+    GSM = 3;
+
+    // Radio technology HSDPA.
+    HSDPA = 4;
+
+    // Radio technology HSPA.
+    HSPA = 5;
+
+    // Radio technology HSPAP.
+    HSPAP = 6;
+
+    // Radio technology HSUPA.
+    HSUPA = 7;
+
+    // Radio technology IWLAN.
+    IWLAN = 8;
+
+    // Radio technology LTE.
+    LTE = 9;
+
+    // Radio technology NR (New Radio) 5G.
+    NR = 10;
+
+    // Radio technology TD_SCDMA.
+    TD_SCDMA = 11;
+
+    // Radio technology UMTS.
+    UMTS = 12;
+  }
+  enum AlwaysOnSetting {
+    // Unspecified. Defaults to NOT_ALWAYS_ON.
+    ALWAYS_ON_SETTING_UNSPECIFIED = 0;
+
+    // The PDU session brought up by this APN should not be always on.
+    NOT_ALWAYS_ON = 1;
+
+    // The PDU session brought up by this APN should always be on. Supported on Android 15 and
+    // above. A NonComplianceDetail with API_LEVEL is reported if the Android version is less than
+    // 15.
+    ALWAYS_ON = 2;
+  }
+
+  // Required. Name of the APN. Policy will be rejected if this field is empty.
+  string apn = 1;
+
+  // Required. Human-readable name that describes the APN. Policy will be rejected if this field is
+  // empty.
+  string display_name = 2;
+
+  // Required. Usage categories for the APN. Policy will be rejected if this field is empty or
+  // contains APN_TYPE_UNSPECIFIED or duplicates. Multiple APN types can be set on fully managed
+  // devices. ENTERPRISE is the only allowed APN type on work profiles. A NonComplianceDetail with
+  // MANAGEMENT_MODE is reported for any other value on work profiles. APN types that are not
+  // supported on the device or management mode will be ignored. If this results in the empty list,
+  // the APN setting will be ignored, because apnTypes is a required field. A NonComplianceDetail
+  // with INVALID_VALUE is reported if none of the APN types are supported on the device or
+  // management mode.
+  repeated ApnType apn_types = 3;
+
+  // Optional. The protocol to use to connect to this APN.
+  Protocol protocol = 4;
+
+  // Optional. The protocol to use to connect to this APN while the device is roaming.
+  Protocol roaming_protocol = 5;
+
+  // Optional. Authentication type of the APN.
+  AuthType auth_type = 6;
+
+  // Optional. APN username of the APN.
+  string username = 7;
+
+  // Optional. APN password of the APN.
+  string password = 8;
+
+  // Optional. MMSC (Multimedia Messaging Service Center) URI of the APN.
+  string mmsc = 9;
+
+  // Optional. MMS (Multimedia Messaging Service) proxy address of the APN which can be an IP
+  // address or hostname (not a URL).
+  string mms_proxy_address = 10;
+
+  // Optional. MMS (Multimedia Messaging Service) proxy port of the APN. A value of 0 (default)
+  // means not set and negative values are rejected.
+  int32 mms_proxy_port = 11;
+
+  // Optional. The proxy address of the APN.
+  string proxy_address = 12;
+
+  // Optional. The proxy port of the APN. A value of 0 (default) means not set and negative values
+  // are rejected.
+  int32 proxy_port = 13;
+
+  // Optional. MVNO match type for the APN.
+  MvnoType mvno_type = 14;
+
+  // Optional. The numeric operator ID of the APN. Numeric operator ID is defined as MCC (Mobile
+  // Country Code) + MNC (Mobile Network Code).
+  string numeric_operator_id = 15;
+
+  // Optional. Carrier ID for the APN. A value of 0 (default) means not set and negative values are
+  // rejected.
+  int32 carrier_id = 16;
+
+  // Optional. Radio technologies (network types) the APN may use. Policy will be rejected if this
+  // field contains NETWORK_TYPE_UNSPECIFIED or duplicates.
+  repeated NetworkType network_types = 17;
+
+  // Optional. The default MTU (Maximum Transmission Unit) size in bytes of the IPv4 routes brought
+  // up by this APN setting. A value of 0 (default) means not set and negative values are rejected.
+  // Supported on Android 13 and above. A NonComplianceDetail with API_LEVEL is reported if the
+  // Android version is less than 13.
+  int32 mtu_v4 = 18;
+
+  // Optional. The MTU (Maximum Transmission Unit) size of the IPv6 mobile interface to which the
+  // APN connected. A value of 0 (default) means not set and negative values are rejected. Supported
+  // on Android 13 and above. A NonComplianceDetail with API_LEVEL is reported if the Android
+  // version is less than 13.
+  int32 mtu_v6 = 19;
+
+  // Optional. Whether User Plane resources have to be activated during every transition from CM-
+  // IDLE mode to CM-CONNECTED state for this APN. See 3GPP TS 23.501 section 5.6.13.
+  AlwaysOnSetting always_on_setting = 20;
+}
+
+// Controls for the display settings.
+message DisplaySettings {
+  // Controls for the screen brightness settings.
+  message ScreenBrightnessSettings {
+    enum ScreenBrightnessMode {
+      // Unspecified. Defaults to BRIGHTNESS_USER_CHOICE.
+      SCREEN_BRIGHTNESS_MODE_UNSPECIFIED = 0;
+
+      // The user is allowed to configure the screen brightness. screenBrightness must not be set.
+      BRIGHTNESS_USER_CHOICE = 1;
+
+      // The screen brightness mode is automatic in which the brightness is automatically adjusted
+      // and the user is not allowed to configure the screen brightness. screenBrightness can still
+      // be set and it is taken into account while the brightness is automatically adjusted.
+      // Supported on Android 9 and above on fully managed devices. A NonComplianceDetail with
+      // API_LEVEL is reported if the Android version is less than 9. Supported on work profiles on
+      // company-owned devices on Android 15 and above.
+      BRIGHTNESS_AUTOMATIC = 2;
+
+      // The screen brightness mode is fixed in which the brightness is set to screenBrightness and
+      // the user is not allowed to configure the screen brightness. screenBrightness must be set.
+      // Supported on Android 9 and above on fully managed devices. A NonComplianceDetail with
+      // API_LEVEL is reported if the Android version is less than 9. Supported on work profiles on
+      // company-owned devices on Android 15 and above.
+      BRIGHTNESS_FIXED = 3;
+    }
+    // Optional. Controls the screen brightness mode.
+    ScreenBrightnessMode screen_brightness_mode = 1;
+
+    // Optional. The screen brightness between 1 and 255 where 1 is the lowest and 255 is the
+    // highest brightness. A value of 0 (default) means no screen brightness set. Any other value is
+    // rejected. screenBrightnessMode must be either BRIGHTNESS_AUTOMATIC or BRIGHTNESS_FIXED to set
+    // this. Supported on Android 9 and above on fully managed devices. A NonComplianceDetail with
+    // API_LEVEL is reported if the Android version is less than 9. Supported on work profiles on
+    // company-owned devices on Android 15 and above.
+    int32 screen_brightness = 2;
+  }
+  // Controls the screen timeout settings.
+  message ScreenTimeoutSettings {
+    enum ScreenTimeoutMode {
+      // Unspecified. Defaults to SCREEN_TIMEOUT_USER_CHOICE.
+      SCREEN_TIMEOUT_MODE_UNSPECIFIED = 0;
+
+      // The user is allowed to configure the screen timeout. screenTimeout must not be set.
+      SCREEN_TIMEOUT_USER_CHOICE = 1;
+
+      // The screen timeout is set to screenTimeout and the user is not allowed to configure the
+      // timeout. screenTimeout must be set. Supported on Android 9 and above on fully managed
+      // devices. A NonComplianceDetail with API_LEVEL is reported if the Android version is less
+      // than 9. Supported on work profiles on company-owned devices on Android 15 and above.
+      SCREEN_TIMEOUT_ENFORCED = 2;
+    }
+    // Optional. Controls whether the user is allowed to configure the screen timeout.
+    ScreenTimeoutMode screen_timeout_mode = 1;
+
+    // Optional. Controls the screen timeout duration. The screen timeout duration must be greater
+    // than 0, otherwise it is rejected. Additionally, it should not be greater than
+    // maximumTimeToLock, otherwise the screen timeout is set to maximumTimeToLock and a
+    // NonComplianceDetail with INVALID_VALUE reason and
+    // SCREEN_TIMEOUT_GREATER_THAN_MAXIMUM_TIME_TO_LOCK specific reason is reported. If the screen
+    // timeout is less than a certain lower bound, it is set to the lower bound. The lower bound may
+    // vary across devices. If this is set, screenTimeoutMode must be SCREEN_TIMEOUT_ENFORCED.
+    // Supported on Android 9 and above on fully managed devices. A NonComplianceDetail with
+    // API_LEVEL is reported if the Android version is less than 9. Supported on work profiles on
+    // company-owned devices on Android 15 and above.
+    int64 screen_timeout_ms = 2;
+  }
+
+  // Optional. Controls the screen brightness settings.
+  ScreenBrightnessSettings screen_brightness_settings = 1;
+
+  // Optional. Controls the screen timeout settings.
+  ScreenTimeoutSettings screen_timeout_settings = 2;
+}
+
+// Configuration for an always-on VPN connection.
+message AlwaysOnVpnPackage {
+  // The package name of the VPN app.
+  string package_name = 1;
+
+  // Disallows networking when the VPN is not connected.
+  bool lockdown_enabled = 2;
+}
+
+// Configuration info for an HTTP proxy. For a direct proxy, set the host, port, and excluded_hosts
+// fields. For a PAC script proxy, set the pac_uri field.
+message ProxyInfo {
+  // The host of the direct proxy.
+  string host = 1;
+
+  // The port of the direct proxy.
+  int32 port = 2;
+
+  // For a direct proxy, the hosts for which the proxy is bypassed. The host names may contain
+  // wildcards such as *.example.com.
+  repeated string excluded_hosts = 3;
+
+  // The URI of the PAC script used to configure the proxy.
+  string pac_uri = 4;
+}
+
+// A default activity for handling intents that match a particular intent filter. Note: To set up a
+// kiosk, use InstallType to KIOSK rather than use persistent preferred activities.
+message PersistentPreferredActivity {
+  // The activity that should be the default intent handler. This should be an Android component
+  // name, e.g. com.android.enterprise.app/.MainActivity. Alternatively, the value may be the
+  // package name of an app, which causes Android Device Policy to choose an appropriate activity
+  // from the app to handle the intent.
+  string receiver_activity = 1;
+
+  // The intent actions to match in the filter. If any actions are included in the filter, then an
+  // intent's action must be one of those values for it to match. If no actions are included, the
+  // intent action is ignored.
+  repeated string actions = 2;
+
+  // The intent categories to match in the filter. An intent includes the categories that it
+  // requires, all of which must be included in the filter in order to match. In other words, adding
+  // a category to the filter has no impact on matching unless that category is specified in the
+  // intent.
+  repeated string categories = 3;
+}
+
+enum PasswordQuality {
+  // There are no password requirements.
+  PASSWORD_QUALITY_UNSPECIFIED = 0;
+
+  // A password is required, but there are no restrictions on what the password must contain.This,
+  // when applied on personally owned work profile devices on Android 12 device-scoped, will be
+  // treated as COMPLEXITY_LOW for application. See PasswordQuality for details.
+  SOMETHING = 1;
+
+  // The password must contain numeric characters.This, when applied on personally owned work
+  // profile devices on Android 12 device-scoped, will be treated as COMPLEXITY_MEDIUM for
+  // application. See PasswordQuality for details.
+  NUMERIC = 2;
+
+  // The password must contain numeric characters with no repeating (4444) or ordered (1234, 4321,
+  // 2468) sequences.This, when applied on personally owned work profile devices on Android 12
+  // device-scoped, will be treated as COMPLEXITY_MEDIUM for application. See PasswordQuality for
+  // details.
+  NUMERIC_COMPLEX = 3;
+
+  // The password must contain alphabetic (or symbol) characters.This, when applied on personally
+  // owned work profile devices on Android 12 device-scoped, will be treated as COMPLEXITY_HIGH for
+  // application. See PasswordQuality for details.
+  ALPHABETIC = 4;
+
+  // The password must contain both numeric and alphabetic (or symbol) characters.This, when applied
+  // on personally owned work profile devices on Android 12 device-scoped, will be treated as
+  // COMPLEXITY_HIGH for application. See PasswordQuality for details.
+  ALPHANUMERIC = 5;
+
+  // The password must meet the minimum requirements specified in passwordMinimumLength,
+  // passwordMinimumLetters, passwordMinimumSymbols, etc. For example, if passwordMinimumSymbols is
+  // 2, the password must contain at least two symbols.This, when applied on personally owned work
+  // profile devices on Android 12 device-scoped, will be treated as COMPLEXITY_HIGH for
+  // application. In this case, the requirements in passwordMinimumLength, passwordMinimumLetters,
+  // passwordMinimumSymbols, etc are not applied. See PasswordQuality for details.
+  COMPLEX = 6;
+
+  // Define the low password complexity band as: pattern PIN with repeating (4444) or ordered (1234,
+  // 4321, 2468) sequencesThis sets the minimum complexity band which the password must
+  // meet.Enforcement varies among different Android versions, management modes and password scopes.
+  // See PasswordQuality for details.
+  COMPLEXITY_LOW = 7;
+
+  // Define the medium password complexity band as: PIN with no repeating (4444) or ordered (1234,
+  // 4321, 2468) sequences, length at least 4 alphabetic, length at least 4 alphanumeric, length at
+  // least 4This sets the minimum complexity band which the password must meet.Enforcement varies
+  // among different Android versions, management modes and password scopes. See PasswordQuality for
+  // details.
+  COMPLEXITY_MEDIUM = 8;
+
+  // Define the high password complexity band as:On Android 12 and above: PIN with no repeating
+  // (4444) or ordered (1234, 4321, 2468) sequences, length at least 8 alphabetic, length at least 6
+  // alphanumeric, length at least 6This sets the minimum complexity band which the password must
+  // meet.Enforcement varies among different Android versions, management modes and password scopes.
+  // See PasswordQuality for details.
+  COMPLEXITY_HIGH = 9;
+}
+
+enum PasswordScope {
+  // The scope is unspecified. The password requirements are applied to the work profile for work
+  // profile devices and the whole device for fully managed or dedicated devices.
+  SCOPE_UNSPECIFIED = 0;
+
+  // The password requirements are only applied to the device.
+  SCOPE_DEVICE = 1;
+
+  // The password requirements are only applied to the work profile.
+  SCOPE_PROFILE = 2;
+}
+
+enum RequirePasswordUnlock {
+  // Unspecified. Defaults to USE_DEFAULT_DEVICE_TIMEOUT.
+  REQUIRE_PASSWORD_UNLOCK_UNSPECIFIED = 0;
+
+  // The timeout period is set to the device’s default.
+  USE_DEFAULT_DEVICE_TIMEOUT = 1;
+
+  // The timeout period is set to 24 hours.
+  REQUIRE_EVERY_DAY = 2;
+}
+
+// Requirements for the password used to unlock a device.
+message PasswordRequirements {
+  // The required password quality.
+  PasswordQuality password_quality = 1;
+
+  // The minimum allowed password length. A value of 0 means there is no restriction. Only enforced
+  // when password_quality is NUMERIC, NUMERIC_COMPLEX, ALPHABETIC, ALPHANUMERIC, or COMPLEX.
+  int32 password_minimum_length = 2;
+
+  // Minimum number of letters required in the password. Only enforced when password_quality is
+  // COMPLEX.
+  int32 password_minimum_letters = 3;
+
+  // Minimum number of lower case letters required in the password. Only enforced when
+  // password_quality is COMPLEX.
+  int32 password_minimum_lower_case = 4;
+
+  // Minimum number of upper case letters required in the password. Only enforced when
+  // password_quality is COMPLEX.
+  int32 password_minimum_upper_case = 5;
+
+  // Minimum number of non-letter characters (numerical digits or symbols) required in the password.
+  // Only enforced when password_quality is COMPLEX.
+  int32 password_minimum_non_letter = 6;
+
+  // Minimum number of numerical digits required in the password. Only enforced when
+  // password_quality is COMPLEX.
+  int32 password_minimum_numeric = 7;
+
+  // Minimum number of symbols required in the password. Only enforced when password_quality is
+  // COMPLEX.
+  int32 password_minimum_symbols = 8;
+
+  // The length of the password history. After setting this field, the user won't be able to enter a
+  // new password that is the same as any password in the history. A value of 0 means there is no
+  // restriction.
+  int32 password_history_length = 9;
+
+  // Number of incorrect device-unlock passwords that can be entered before a device is wiped. A
+  // value of 0 means there is no restriction.
+  int32 maximum_failed_passwords_for_wipe = 10;
+
+  // Password expiration timeout.
+  int64 password_expiration_timeout_ms = 11;
+
+  // The length of time after a device or work profile is unlocked using a strong form of
+  // authentication (password, PIN, pattern) that it can be unlocked using any other authentication
+  // method (e.g. fingerprint, trust agents, face). After the specified time period elapses, only
+  // strong forms of authentication can be used to unlock the device or work profile.
+  RequirePasswordUnlock require_password_unlock = 12;
+
+  // The scope that the password requirement applies to.
+  PasswordScope password_scope = 13;
+}
+
+// The default application setting for a DefaultApplicationType.
+message DefaultApplicationSetting {
+  // Required. The list of applications that can be set as the default app for a given type. This
+  // list must not be empty or contain duplicates. The first app in the list that is installed and
+  // qualified for the defaultApplicationType (e.g. SMS app for DEFAULT_SMS) is set as the default
+  // app. The signing key certificate fingerprint of the app on the device must also match one of
+  // the signing key certificate fingerprints obtained from Play Store or one of the entries in
+  // ApplicationPolicy.signingKeyCerts in order to be set as the default.If the
+  // defaultApplicationScopes contains SCOPE_FULLY_MANAGED or SCOPE_WORK_PROFILE, the app must have
+  // an entry in applications with installType set to a value other than BLOCKED.A
+  // NonComplianceDetail with APP_NOT_INSTALLED reason and
+  // DEFAULT_APPLICATION_SETTING_FAILED_FOR_SCOPE specific reason is reported if none of the apps in
+  // the list are installed. A NonComplianceDetail with INVALID_VALUE reason and
+  // DEFAULT_APPLICATION_SETTING_FAILED_FOR_SCOPE specific reason is reported if at least one app is
+  // installed but the policy fails to apply due to other reasons (e.g. the app is not of the right
+  // type).When applying to SCOPE_PERSONAL_PROFILE on a company-owned device with a work profile,
+  // only pre-installed system apps can be set as the default. A NonComplianceDetail with
+  // INVALID_VALUE reason and DEFAULT_APPLICATION_SETTING_FAILED_FOR_SCOPE specific reason is
+  // reported if the policy fails to apply to the personal profile.
+  repeated DefaultApplication default_applications = 1;
+}
+
+// Information about the application to be set as the default.
+message DefaultApplication {
+  enum DefaultApplicationType {
+    // Unspecified. This value must not be used.
+    DEFAULT_APPLICATION_TYPE_UNSPECIFIED = 0;
+
+    // The assistant app type. This app type is only allowed to be set for
+    // SCOPE_FULLY_MANAGED.Supported on fully managed devices on Android 16 and above. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for other management modes. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 16.
+    DEFAULT_ASSISTANT = 1;
+
+    // The browser app type.Supported on Android 16 and above. A NonComplianceDetail with API_LEVEL
+    // is reported if the Android version is less than 16.
+    DEFAULT_BROWSER = 2;
+
+    // The call redirection app type. This app type cannot be set for
+    // SCOPE_PERSONAL_PROFILE.Supported on Android 16 and above. A NonComplianceDetail with
+    // API_LEVEL is reported if the Android version is less than 16.
+    DEFAULT_CALL_REDIRECTION = 3;
+
+    // The call screening app type. This app type cannot be set for SCOPE_PERSONAL_PROFILE.Supported
+    // on Android 16 and above. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 16.
+    DEFAULT_CALL_SCREENING = 4;
+
+    // The dialer app type.Supported on fully managed devices on Android 14 and 15. A
+    // NonComplianceDetail with MANAGEMENT_MODE is reported for other management modes. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than
+    // 14.Supported on all management modes on Android 16 and above.
+    DEFAULT_DIALER = 5;
+
+    // The home app type. This app type is only allowed to be set for SCOPE_FULLY_MANAGED.Supported
+    // on fully managed devices on Android 16 and above. A NonComplianceDetail with MANAGEMENT_MODE
+    // is reported for other management modes. A NonComplianceDetail with API_LEVEL is reported if
+    // the Android version is less than 16.
+    DEFAULT_HOME = 6;
+
+    // The SMS app type. This app type cannot be set for SCOPE_WORK_PROFILE.Supported on company-
+    // owned devices on Android 16 and above. A NonComplianceDetail with MANAGEMENT_MODE is reported
+    // for personally-owned devices. A NonComplianceDetail with API_LEVEL is reported if the Android
+    // version is less than 16.
+    DEFAULT_SMS = 7;
+
+    // The wallet app type. The default application of this type applies across profiles.On a
+    // company-owned device with a work profile, admins can set the scope to SCOPE_PERSONAL_PROFILE
+    // to set a personal profile pre-installed system app as the default, or to SCOPE_WORK_PROFILE
+    // to set a work profile app as the default. It is not allowed to specify both scopes at the
+    // same time.Due to a known issue, the user may be able to change the default wallet even when
+    // this is set on a fully managed device.Supported on company-owned devices on Android 16 and
+    // above. A NonComplianceDetail with MANAGEMENT_MODE is reported for personally-owned devices. A
+    // NonComplianceDetail with API_LEVEL is reported if the Android version is less than 16.
+    DEFAULT_WALLET = 8;
+  }
+  enum DefaultApplicationScope {
+    // Unspecified. This value must not be used.
+    DEFAULT_APPLICATION_SCOPE_UNSPECIFIED = 0;
+
+    // Sets the application as the default on fully managed devices.
+    SCOPE_FULLY_MANAGED = 1;
+
+    // Sets the application as the work profile default.Only supported for DEFAULT_BROWSER,
+    // DEFAULT_CALL_REDIRECTION, DEFAULT_CALL_SCREENING, DEFAULT_DIALER and DEFAULT_WALLET.
+    SCOPE_WORK_PROFILE = 2;
+
+    // Sets the application as the personal profile default on company-owned devices with a work
+    // profile. Only pre-installed system apps can be set as the default.Only supported for
+    // DEFAULT_BROWSER, DEFAULT_DIALER, DEFAULT_SMS and DEFAULT_WALLET.
+    SCOPE_PERSONAL_PROFILE = 3;
+  }
+  // Required. The package name that should be set as the default application. The policy is
+  // rejected if the package name is invalid.
+  string package_name = 1;
+
+  // The type of default this package becomes. Required; unspecified or unrecognised discards the
+  // entry.
+  DefaultApplicationType default_application_type = 2;
+
+  // The profiles the default applies to. Empty is equivalent to SCOPE_FULLY_MANAGED.
+  repeated DefaultApplicationScope default_application_scopes = 3;
+}
+
+enum AppFunctions {
+  // Unspecified. Defaults to APP_FUNCTIONS_ALLOWED.
+  APP_FUNCTIONS_UNSPECIFIED = 0;
+
+  // Apps on the device for fully managed devices or in the work profile for devices with work
+  // profiles are not allowed to expose app functions. If this is set, crossProfileAppFunctions must
+  // not be set to CROSS_PROFILE_APP_FUNCTIONS_ALLOWED, otherwise the policy will be rejected.
+  APP_FUNCTIONS_DISALLOWED = 1;
+
+  // Apps on the device for fully managed devices or in the work profile for devices with work
+  // profiles are allowed to expose app functions.
+  APP_FUNCTIONS_ALLOWED = 2;
+}
+
+enum WipeDataFlag {
+  // This value is ignored.
+  WIPE_DATA_FLAG_UNSPECIFIED = 0;
+
+  // For company-owned devices, this removes all eSIMs from the device when the device is wiped. In
+  // personally-owned devices, this will remove managed eSIMs (eSIMs which are added via the
+  // ADD_ESIM command) on the devices and no personally owned eSIMs will be removed. For devices
+  // running on Android 16 or higher, managed eSIMs are always wiped when work profile is removed
+  // for personally-owned devices, whether this flag is provided or not.
+  WIPE_ESIMS = 1;
+}
+
+// Settings controlling the behavior of status reports.
+message StatusReportingSettings {
+  // Whether app reports are enabled.
+  bool application_reports_enabled = 1;
+
+  // Whether device settings reporting is enabled.
+  bool device_settings_enabled = 2;
+
+  // Whether software info reporting is enabled.
+  bool software_info_enabled = 3;
+
+  // Whether memory event reporting is enabled.
+  bool memory_info_enabled = 4;
+
+  // Whether network info reporting is enabled.
+  bool network_info_enabled = 5;
+
+  // Whether displays reporting is enabled. Report data is not available for personally owned
+  // devices with work profiles.
+  bool display_info_enabled = 6;
+
+  // Whether power management event reporting is enabled. Report data is not available for
+  // personally owned devices with work profiles.
+  bool power_management_events_enabled = 7;
+
+  // Whether hardware status reporting is enabled. Report data is not available for personally owned
+  // devices with work profiles.
+  bool hardware_status_enabled = 8;
+
+  // Whether system properties reporting is enabled.
+  bool system_properties_enabled = 9;
+
+  // Whether Common Criteria Mode reporting is enabled. This is supported only on company-owned
+  // devices.
+  bool common_criteria_mode_enabled = 10;
+
+  // Optional. Whether defaultApplicationInfo reporting is enabled.
+  bool default_application_info_reporting_enabled = 11;
+
+  // Application reporting settings. Only applicable if application_reports_enabled is true.
+  ApplicationReportingSettings application_reporting_settings = 12;
+}
+
+// Settings controlling the behavior of application reports.
+message ApplicationReportingSettings {
+  // Whether removed apps are included in application reports.
+  bool include_removed_apps = 1;
+}
+
+// Controls apps' access to private keys. The rule determines which private key, if any, Android
+// Device Policy grants to the specified app. Access is granted either when the app calls
+// KeyChain.choosePrivateKeyAlias (https://developer.android.com/reference/android/security/KeyChain
+// #choosePrivateKeyAlias%28android.app.Activity,%20android.security.KeyChainAliasCallback,%20java.l
+// ang.String[],%20java.security.Principal[],%20java.lang.String,%20int,%20java.lang.String%29) (or
+// any overloads) to request a private key alias for a given URL, or for rules that are not URL-
+// specific (that is, if urlPattern is not set, or set to the empty string or .*) on Android 11 and
+// above, directly so that the app can call KeyChain.getPrivateKey (https://developer.android.com/re
+// ference/android/security/KeyChain#getPrivateKey%28android.content.Context,%20java.lang.String%29)
+// , without first having to call KeyChain.choosePrivateKeyAlias.When an app calls
+// KeyChain.choosePrivateKeyAlias if more than one choosePrivateKeyRules matches, the last matching
+// rule defines which key alias to return.
+message ChoosePrivateKeyRule {
+  // The URL pattern to match against the URL of the request. If not set or empty, it matches all
+  // URLs. This uses the regular expression syntax of java.util.regex.Pattern.
+  string url_pattern = 1;
+
+  // The alias of the private key to be used.
+  string private_key_alias = 2;
+
+  // The package names to which this rule applies. The signing key certificate fingerprint of the
+  // app is verified against the signing key certificate fingerprints provided by Play Store and
+  // ApplicationPolicy.signingKeyCerts . If no package names are specified, then the alias is
+  // provided to all apps that call KeyChain.choosePrivateKeyAlias (https://developer.android.com/re
+  // ference/android/security/KeyChain#choosePrivateKeyAlias%28android.app.Activity,%20android.secur
+  // ity.KeyChainAliasCallback,%20java.lang.String[],%20java.security.Principal[],%20java.lang.Strin
+  // g,%20int,%20java.lang.String%29) or any overloads (but not without calling
+  // KeyChain.choosePrivateKeyAlias, even on Android 11 and above). Any app with the same Android
+  // UID as a package specified here will have access when they call KeyChain.choosePrivateKeyAlias.
+  repeated string package_names = 3;
+}
+
+// Network configuration for the device. Xamanta-specific shape: Android Management API carries this
+// as a free-form JSON Struct following the Chromium Open Network Configuration specification, while
+// here it is a typed message with the same field set, so that a malformed network fails to parse at
+// the edge rather than arriving as a half-applied Wi-Fi configuration.
+message OpenNetworkConfiguration {
+  // The networks to provision. A GUID that disappears from this list is removed from the device.
+  repeated NetworkConfiguration network_configurations = 1;
+
+  // Certificates referenced by GUID from the EAP settings of the networks above.
+  repeated OncCertificate certificates = 2;
+}
+
+// One provisioned network, following the Chromium Open Network Configuration NetworkConfiguration
+// object.
+message NetworkConfiguration {
+  // A stable identifier for the network, and the DPC's bookkeeping key. Required.
+  string guid = 1;
+
+  // A human-readable name for the network.
+  string name = 2;
+
+  // The Wi-Fi settings for this network. Required.
+  WifiSettings wifi = 3;
+
+  // A per-network proxy. Absent means no proxy. Only the manual form and PAC are expressible.
+  ProxyInfo proxy_settings = 4;
+}
+
+// The Wi-Fi settings of a provisioned network, following the Chromium Open Network Configuration
+// WiFi object.
+message WifiSettings {
+  enum Security {
+    // Unspecified. The network is discarded: the DPC cannot guess how to join it.
+    SECURITY_UNSPECIFIED = 0;
+
+    // Authentication is not required.
+    NONE = 1;
+
+    // WEP with a pre-shared key.
+    WEP_PSK = 2;
+
+    // WPA or WPA2 with a pre-shared key.
+    WPA_PSK = 3;
+
+    // WPA or WPA2 Enterprise with EAP. Requires eap.
+    WPA_EAP = 4;
+
+    // Dynamic WEP with 802.1X. Requires eap.
+    WEP_8021X = 5;
+
+    // WPA3 Enterprise 192-bit mode. Requires eap.
+    WPA3_ENTERPRISE_192 = 6;
+  }
+  enum MacAddressRandomizationMode {
+    // Unspecified. The platform's default is used.
+    MAC_ADDRESS_RANDOMIZATION_MODE_UNSPECIFIED = 0;
+
+    // The device's real hardware MAC address is used. Choose this only where the network
+    // authenticates by MAC address, since it makes the device trackable across networks.
+    HARDWARE = 1;
+
+    // Install automatically as soon as an update is available.
+    AUTOMATIC = 2;
+  }
+  // The SSID as UTF-8 text. Exactly one of ssid and hex_ssid is required; when both are given they
+  // must agree.
+  string ssid = 1;
+
+  // The SSID hex-encoded, for names that are not valid UTF-8.
+  string hex_ssid = 2;
+
+  // Whether the network does not broadcast its SSID, so the device must probe for it.
+  bool hidden_ssid = 3;
+
+  // The security type of the network. Required.
+  Security security = 4;
+
+  // Whether the device may join this network on its own, without the user choosing it.
+  bool auto_connect = 5;
+
+  // The pre-shared key. For WPA_PSK, 8 to 63 ASCII characters; for WEP_PSK, 10 or 26 hexadecimal
+  // digits with an optional 0x prefix. Ignored for NONE and for the EAP security types.
+  string passphrase = 6;
+
+  // The EAP settings. Required by, and only read for, WPA_EAP, WEP_8021X and WPA3_ENTERPRISE_192.
+  EapSettings eap = 7;
+
+  // How the device's MAC address is presented to this network.
+  MacAddressRandomizationMode mac_address_randomization_mode = 8;
+}
+
+// EAP settings for an enterprise Wi-Fi network, following the Chromium Open Network Configuration
+// EAP object.
+message EapSettings {
+  enum Outer {
+    // Unspecified. The network is discarded: there is no sane default EAP method.
+    OUTER_UNSPECIFIED = 0;
+
+    // EAP-AKA, authenticating with the SIM's UMTS credentials.
+    EAP_AKA = 1;
+
+    // EAP-TLS, authenticating with a client certificate.
+    EAP_TLS = 2;
+
+    // EAP-TTLS, tunnelling a phase-2 method inside TLS.
+    EAP_TTLS = 3;
+
+    // EAP-SIM, authenticating with the SIM's GSM credentials.
+    EAP_SIM = 4;
+
+    // EAP-PWD, authenticating with a password.
+    EAP_PWD = 5;
+
+    // PEAP, tunnelling a phase-2 method inside TLS.
+    PEAP = 6;
+  }
+  enum Inner {
+    // No phase-2 method.
+    INNER_UNSPECIFIED = 0;
+
+    // MSCHAPv2.
+    MSCHAPV2 = 1;
+
+    // Authentication type for PAP.
+    PAP = 2;
+  }
+  enum ClientCertType {
+    // No client certificate.
+    CLIENT_CERT_TYPE_UNSPECIFIED = 0;
+
+    // client_cert_ref names the GUID of a CLIENT certificate in this policy.
+    REF = 1;
+
+    // client_cert_key_pair_alias names an alias already in the keystore. Requires Android 12L.
+    KEY_PAIR_ALIAS = 2;
+  }
+  // The outer, phase-1 EAP method. Required.
+  Outer outer = 1;
+
+  // The inner, phase-2 method, used inside EAP-TTLS and PEAP.
+  Inner inner = 2;
+
+  // The identity presented to the network.
+  string identity = 3;
+
+  // Domain suffixes the server certificate must match. Required: an empty list would accept any
+  // server holding a certificate from the CA, so the DPC refuses the network and reports
+  // INVALID_VALUE.
+  repeated string domain_suffix_match = 4;
+
+  // GUIDs of SERVER certificates accepted as the trust anchor for this network.
+  repeated string server_ca_refs = 5;
+
+  // Where the client certificate comes from.
+  ClientCertType client_cert_type = 6;
+
+  // The GUID of a CLIENT certificate. Required for client certificate type REF.
+  string client_cert_ref = 7;
+
+  // The alias of a key pair already in the keystore. Required for client certificate type
+  // KEY_PAIR_ALIAS.
+  string client_cert_key_pair_alias = 8;
+
+  // The password, meaningful only for EAP-TTLS and PEAP.
+  string password = 9;
+
+  // The identity sent in the clear during phase 1, so that the real identity stays inside the
+  // tunnel. Empty means identity is sent instead.
+  string anonymous_identity = 10;
+}
+
+// A certificate provisioned along with the networks that reference it, following the Chromium Open
+// Network Configuration Certificate object.
+message OncCertificate {
+  enum Type {
+    // Unspecified. The certificate is discarded.
+    TYPE_UNSPECIFIED = 0;
+
+    // A CA certificate used as a trust anchor. x509 is required.
+    SERVER = 1;
+
+    // A client certificate and its private key. pkcs12 is required.
+    CLIENT = 2;
+  }
+  // A stable identifier, referenced from the EAP settings of a network. Required.
+  string guid = 1;
+
+  // What the certificate is for.
+  Type type = 2;
+
+  // The certificate as Base64-encoded DER X.509. Required for SERVER.
+  string x509 = 3;
+
+  // A Base64-encoded PKCS#12 bundle holding the certificate and its private key. Required for
+  // CLIENT.
+  string pkcs12 = 4;
+
+  // The passphrase protecting pkcs12. Empty means the bundle is unencrypted.
+  string pkcs12_password = 5;
+}
+
+// Sent by the device to open the policy stream. Xamanta-specific: Android Management API has no
+// device-initiated sync, so this carries the identity a server needs to target policies, vet the
+// DPC signer and orchestrate self-updates.
+message SyncRequest {
+  // The device's stable identity: the OAuth client id it enrolled with, which is its ANDROID_ID.
+  string device_id        = 1;
+
+  // The DPC's application id.
+  string package_name     = 2;
+
+  // SHA-256 of the DPC's signing certificate, in hexadecimal. A server that pins this learns at
+  // once if it is talking to a DPC it did not authorise.
+  string signing_sha256   = 3;
+
+  // The DPC's PackageInfo.longVersionCode.
+  int64  version_code     = 4;
+
+  // The DPC's PackageInfo.versionName.
+  string version_name     = 5;
+
+  // The device's Build.VERSION.SDK_INT.
+  int32  api_level        = 6;
+
+  // The device's Build.VERSION.RELEASE.
+  string android_version  = 7;
+
+  // The device's Build.VERSION.SECURITY_PATCH.
+  string security_patch   = 8;
+
+  // The device's Build.MODEL.
+  string model            = 9;
+
+  // The device's Build.MANUFACTURER.
+  string manufacturer     = 10;
+
+  // The device's Build.BRAND.
+  string brand            = 11;
+}
+
+// A policy pushed from the server to the device on the policy stream.
+message ApplyPolicyRequest {
+  // The complete policy to apply. It is accepted only if it is strictly newer than the one in
+  // force, by lineage and version; otherwise it is ignored in silence.
+  Policy policy = 1;
+
+  // Informational for the server's own bookkeeping. The device ignores it: a policy is applied in
+  // full on every pass, so there is nothing for a force flag to change.
+  bool force = 2;
+
+  // Informational for the server's own bookkeeping. The device ignores it.
+  string requested_by = 3;
+}
+
+enum Compliance {
+  // The policy is fully applied: the pass produced no non-compliance details and left no
+  // asynchronous work pending.
+  IN_FORCE           = 0;
+
+  // At least one setting could not be applied. The device retries with exponential backoff, from 30
+  // seconds to 30 minutes.
+  DEFIANCE           = 1;
+
+  // Reserved for the server: no policy is assigned to this device. Never sent by a device.
+  UNASSIGNED         = 2;
+
+  // The policy has been received and written to the device's storage, and reconciliation is about
+  // to begin. Sent after the write, not on receipt: an acknowledgement the device could still lose
+  // to a crash would let the server record a version that is in force nowhere.
+  PENDING_COMPLIANCE = 3;
+
+  // Reserved for the server: the device has not synced yet. Never sent by a device.
+  PENDING_SYNC       = 4;
+
+  // Reserved for the server: the device is being decommissioned. Never sent by a device.
+  DECOMMISSION       = 5;
+}
+
+enum NonComplianceReason {
+  // This value is not used.
+  NON_COMPLIANCE_REASON_UNSPECIFIED = 0;
+
+  // The setting is not supported in the API level of the Android version running on the device.
+  API_LEVEL         = 1;
+
+  // The management mode (such as fully managed or work profile) doesn't support the setting.
+  MANAGEMENT_MODE   = 2;
+
+  // The user has not taken required action to comply with the setting.
+  USER_ACTION       = 3;
+
+  // The setting has an invalid value.
+  INVALID_VALUE     = 4;
+
+  // The app required to implement the policy is not installed.
+  APP_NOT_INSTALLED = 5;
+
+  // Encryption is not supported by the device.
+  UNSUPPORTED       = 6;
+
+  // A blocked app is installed.
+  APP_INSTALLED     = 7;
+
+  // The setting hasn't been applied at the time of the report, but is expected to be applied
+  // shortly.
+  PENDING           = 8;
+
+  // The setting can't be applied to the app because the app doesn't support it, for example because
+  // its target SDK version is not high enough.
+  APP_INCOMPATIBLE  = 9;
+
+  // The app is installed, but it hasn't been updated to the minimum version code specified by
+  // policy.
+  APP_NOT_UPDATED   = 10;
+}
+
+enum InstallationFailureReason {
+  // This value is disallowed.
+  INSTALLATION_FAILURE_REASON_UNSPECIFIED = 0;
+
+  // An unknown condition is preventing the app from being installed. Some potential reasons are
+  // that the device doesn't have enough storage, the device network connection is unreliable, or
+  // the installation is taking longer than expected. The installation will be retried
+  // automatically.
+  INSTALLATION_FAILURE_REASON_UNKNOWN     = 1;
+
+  // The installation is still in progress.
+  IN_PROGRESS                             = 2;
+
+  // The app was not found in Play.
+  NOT_FOUND                               = 3;
+
+  // The app is incompatible with the device.
+  NOT_COMPATIBLE_WITH_DEVICE              = 4;
+
+  // The app has not been approved by the admin.
+  NOT_APPROVED                            = 5;
+
+  // The app has new permissions that have not been accepted by the admin.
+  PERMISSIONS_NOT_ACCEPTED                = 6;
+
+  // The app is not available in the user's country.
+  NOT_AVAILABLE_IN_COUNTRY                = 7;
+
+  // There are no licenses available to assign to the user.
+  NO_LICENSES_REMAINING                   = 8;
+
+  // The enterprise is no longer enrolled with Managed Google Play or the admin has not accepted the
+  // latest Managed Google Play Terms of Service.
+  NOT_ENROLLED                            = 9;
+
+  // The user is no longer valid. The user may have been deleted or disabled.
+  USER_INVALID                            = 10;
+
+  // A network error on the user's device has prevented the install from succeeding. This usually
+  // happens when the device's internet connectivity is degraded, unavailable or there's a network
+  // configuration issue. Please ensure the device has access to full internet connectivity on a
+  // network that meets Android Enterprise Network Requirements
+  // (https://support.google.com/work/android/answer/10513641). App install or update will
+  // automatically resume once this is the case.
+  NETWORK_ERROR_UNRELIABLE_CONNECTION     = 11;
+
+  // The user's device does not have sufficient storage space to install the app. This can be
+  // resolved by clearing up storage space on the device. App install or update will automatically
+  // resume once the device has sufficient storage.
+  INSUFFICIENT_STORAGE                    = 12;
+}
+
+// Provides detail about non-compliance with a policy setting.
+message NonComplianceDetail {
+  // The name of the policy setting. This is the JSON field name of a top-level Policy field.
+  string setting_name                                = 1;
+
+  // The reason the device is not in compliance with the setting.
+  NonComplianceReason non_compliance_reason          = 2;
+
+  // The package name indicating which app is out of compliance, if applicable.
+  string package_name                                = 3;
+
+  // For settings with nested fields, if a particular nested field is out of compliance, this
+  // specifies the full path to the offending field. The path is formatted in the same way the
+  // policy JSON field would be referenced in JavaScript, that is: 1) For object-typed fields, the
+  // field name is followed by a dot then by a subfield name. 2) For array-typed fields, the field
+  // name is followed by the array index enclosed in brackets. For example, to indicate a problem
+  // with the url field in the externalData field in the 3rd application, the path would be
+  // applications[2].externalData.url
+  string field_path                                  = 4;
+
+  // If the policy setting could not be applied, the current value of the setting on the device.
+  string current_value                               = 5;
+
+  // If package_name is set and the non-compliance reason is APP_NOT_INSTALLED or APP_NOT_UPDATED,
+  // the detailed reason the app can't be installed or updated.
+  InstallationFailureReason installation_failure_reason = 6;
+}
+
+// The device's report on one reconciliation pass.
+message ApplyPolicyResponse {
+  // The overall compliance state.
+  Compliance compliance               = 1;
+
+  // What could not be applied. Empty except with DEFIANCE.
+  repeated NonComplianceDetail details = 2;
+
+  // Identifies the pass, as v<version>.<n> where n increases within the process. One policy version
+  // can produce several reports, and this tells them apart.
+  string execution_id                 = 3;
+
+  // The time at which the report was produced, as an ISO-8601 instant.
+  string applied_at                   = 4;
+}
+
+// The server's acknowledgement of a compliance report.
+message ComplianceAck {
+  // Whether the server received the report. The device does not retry on false; the next pass
+  // reports again.
+  bool received = 1;
+}
+
+// The policy channel. The device is the gRPC client; both calls carry an OAuth bearer token.
+service PolicySyncService {
+  // Opens the policy stream. The device sends its identity once and the server streams a policy
+  // whenever an administrator changes one. The device keeps the last accepted lineage and version,
+  // and accepts an incoming policy only when its lineage differs or its version is strictly
+  // greater, so a replayed stream cannot roll the device back.
+  rpc SyncPolicy(SyncRequest) returns (stream ApplyPolicyRequest);
+
+  // Reports the outcome of applying a policy: once with PENDING_COMPLIANCE as soon as the policy
+  // has been persisted, then again with the verdict of each reconciliation pass.
+  rpc ReportCompliance(ApplyPolicyResponse) returns (ComplianceAck);
+}

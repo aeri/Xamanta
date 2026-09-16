@@ -1,0 +1,48 @@
+[versions]
+agp = "9.2.1"
+# Must match the Kotlin Gradle plugin bundled with AGP (9.2.1 -> KGP 2.2.10). AGP's built-in
+# Kotlin support resolves the serialization *compiler* plugin from its own KGP version, so a
+# different value here would only put a mismatched Gradle plugin API on the buildscript classpath.
+kotlin = "2.2.10"
+coreKtx = "1.17.0"
+junit = "4.13.2"
+appcompat = "1.6.1"
+material = "1.12.0"
+grpc = "1.81.1"
+grpcKotlin = "1.5.0"
+protoc = "3.25.1"
+protobufPlugin = "0.10.0"
+javaxAnnotation = "1.3.2"
+kotlinxCoroutinesAndroid = "1.10.2" # Using > 1.10.2 broken install in Android 5.0 with INSTALL_FAILED_DEXOPT
+kotlinxSerializationJson = "1.11.0"
+workRuntimeKtx = "2.10.5"
+lifecycleService = "2.9.4"
+preferenceKtx = "1.2.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+grpc-okhttp = { group = "io.grpc", name = "grpc-okhttp", version.ref = "grpc" }
+grpc-protobuf-lite = { group = "io.grpc", name = "grpc-protobuf-lite", version.ref = "grpc" }
+grpc-stub = { group = "io.grpc", name = "grpc-stub", version.ref = "grpc" }
+grpc-kotlin-stub = { group = "io.grpc", name = "grpc-kotlin-stub", version.ref = "grpcKotlin" }
+javax-annotation = { group = "javax.annotation", name = "javax.annotation-api", version.ref = "javaxAnnotation" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
+androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycleService" }
+androidx-preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "preferenceKtx" }
+# Full protobuf runtime, used ONLY by :tools:protodoc to read the descriptor set at build time.
+# :app stays on protobuf-javalite; this must never reach the Android classpath.
+protobuf-java = { group = "com.google.protobuf", name = "protobuf-java", version.ref = "protoc" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+# Generates the $$serializer classes for @Serializable models. Without it kotlinx-serialization-json
+# is a runtime library only and every encode/decode throws SerializationException at runtime.
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+

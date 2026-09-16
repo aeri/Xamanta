@@ -1,0 +1,486 @@
+// Portions of this file's documentation are copied or adapted from the Android Management API
+// reference (https://developers.google.com/android/management/reference/rest/v1/), (c) Google LLC,
+// licensed under the Creative Commons Attribution 4.0 License
+// (https://creativecommons.org/licenses/by/4.0/). Field and enum descriptions that have an Android
+// Management API counterpart are reproduced verbatim from its discovery document; the rest describe
+// Xamanta's own surface and say so. Xamanta is not affiliated with, endorsed by, or sponsored by
+// Google. Android is a trademark of Google LLC.
+
+syntax = "proto3";
+
+// Xamanta command reference
+//
+// A command is an imperative, one-shot action the management server asks a device to perform now.
+// The vocabulary follows the Android Management API
+// (https://developers.google.com/android/management/reference/rest/v1/enterprises.devices/issueCommand),
+// and every field with a counterpart there carries Google's own description.
+//
+// Two structural differences from Android Management API, because this is not a REST API:
+// commands travel on a bidirectional gRPC stream rather than over HTTP, and the device answers with
+// a CommandResult on that same stream rather than with a long-running Operation the administrator
+// polls. Delivery is at-least-once: the device remembers its most recent answers and replays them
+// for a re-push without executing anything again, so re-pushing is safe.
+package commands;
+
+option java_package = "cat.naval.xamanta.protos";
+option java_outer_classname = "CommandsProto";
+option java_multiple_files = true;
+option csharp_namespace = "XamantaC2";
+
+enum CommandType {
+  // This value is disallowed.
+  COMMAND_TYPE_UNSPECIFIED = 0;
+
+  // Lock the device, as if the lock screen timeout had expired. For a work profile, if there is a
+  // separate work profile lock, this only locks the work profile, with one exception: on work
+  // profiles on an organization-owned device running Android 8, 9, or 10, this locks the entire
+  // device.
+  LOCK                     = 1;
+
+  // Reset the user's password.
+  RESET_PASSWORD           = 2;
+
+  // Reboot the device. Only supported on fully managed devices running Android 7.0 (API level 24)
+  // or higher.
+  REBOOT                   = 3;
+
+  // Wipes the device, via a factory reset for a company owned device, or by deleting the work
+  // profile for a personally owned device with work profile. The wipe only occurs once the device
+  // acknowledges the command. The command can be cancelled before then.
+  WIPE                     = 4;
+
+  // Request information related to the device.
+  REQUEST_DEVICE_INFO      = 5;
+
+  // Clears the application data of specified apps. This is supported on Android 9 and above. Note
+  // that an application can store data outside of its application data, for example in external
+  // storage or in a user dictionary. See also clear_apps_data_params.
+  CLEAR_APP_DATA           = 6;
+
+  // Forget the current enrollment and enroll against a different management server, without a
+  // factory reset. Xamanta-specific: an Android Management API device is bound to Google's
+  // infrastructure rather than to a server of the operator's choosing.
+  REMARRY                  = 7;
+
+  // Return the device to its user: undo every policy setting, withdraw provisioned networks,
+  // certificates, keys and APNs, leave lock task mode, unblock uninstalls, and only then release
+  // device owner. The cleanup runs first because afterwards the DPC would no longer have the
+  // privileges to do it. The closest Android Management API equivalent is RELINQUISH_OWNERSHIP.
+  DECOMMISSION             = 8;
+}
+
+// Parameters for RESET_PASSWORD. Xamanta-specific shape: Android Management API carries newPassword
+// directly on the command.
+message ResetPasswordParams {
+  // For commands of type RESET_PASSWORD, optionally specifies the new password. Note: The new
+  // password must be at least 6 characters long if it is numeric in case of Android 14 devices.
+  // Else the command will fail with INVALID_VALUE.
+  string new_password = 1;
+}
+
+// Parameters associated with the WIPE command to wipe the device.
+message WipeParams {
+  // Whether to also wipe external storage, such as an SD card. Equivalent to WIPE_EXTERNAL_STORAGE
+  // in Android Management API's wipeDataFlags.
+  bool wipe_external_storage = 1;
+
+  // Whether to keep factory reset protection data. False, the default, wipes it so that the device
+  // can be set up again without the previously enrolled account. Requires Android 5.1; on Android
+  // 5.0 a command asking for it is answered with COMMAND_API_LEVEL and nothing is wiped.
+  bool preserve_reset_protection = 2;
+}
+
+// Parameters for CLEAR_APP_DATA. Differs from Android Management API, whose clearAppsDataParams
+// clears several apps in one command; here one command clears one package.
+message ClearAppDataParams {
+  // The package names of the apps whose data will be cleared when the command is executed.
+  string package_name = 1;
+}
+
+// Parameters for REMARRY: the credentials of the server the device should move to. The whole
+// payload is validated with the same checks as initial provisioning before anything is forgotten,
+// so a device never abandons a working enrollment for one it could not reach.
+message RemarryParams {
+  // The OAuth token endpoint of the new server. Must be HTTPS. Required.
+  string token_endpoint   = 1;
+
+  // Hostname of the new gRPC management server. Required.
+  string host             = 2;
+
+  // Port of the new gRPC management server. Must be in 1-65535.
+  int32  port             = 3;
+
+  // Single-use enrollment token that authorises this device to register with the new server.
+  // Required.
+  string enrollment_token = 4;
+
+  reserved 5;
+  reserved "use_tls";
+  // Optional Base64-DER X.509 certificate of a self-signed server, or of the CA that issued its
+  // certificates. When present it becomes the only trust anchor for both the token endpoint and the
+  // gRPC host, so it must be the CA that issued both. Empty means rely on the public CAs.
+  string server_ca_cert   = 6;
+}
+
+// A command.
+message Command {
+  // Server-assigned unique identifier for this command. The device echoes it in CommandResult.id
+  // and uses it to recognise a re-push of a command it has already answered.
+  string id = 1;
+
+  // The type of the command.
+  CommandType type = 2;
+
+  // The timestamp at which the command was created. The timestamp is automatically generated by the
+  // server.
+  string issued_at = 3;
+
+  // The duration for which the command is valid. The command will expire if not executed by the
+  // device during this time. The default duration if unspecified is ten minutes. There is no
+  // maximum duration.
+  int64 duration_seconds = 4;
+
+  oneof params {
+    // Required for RESET_PASSWORD. Ignored for every other type.
+    ResetPasswordParams reset_password_params = 10;
+
+    // Optional. Parameters for the WIPE command to wipe the device. If this is set, then it is
+    // suggested that type should not be set. In this case, the server automatically sets it to
+    // WIPE. It is also acceptable to explicitly set type to WIPE.
+    WipeParams          wipe_params           = 11;
+
+    // Parameters for the CLEAR_APP_DATA command to clear the data of specified apps from the
+    // device. See ClearAppsDataParams. If this is set, then it is suggested that type should not be
+    // set. In this case, the server automatically sets it to CLEAR_APP_DATA. It is also acceptable
+    // to explicitly set type to CLEAR_APP_DATA.
+    ClearAppDataParams  clear_app_data_params = 12;
+
+    // Required for REMARRY. Ignored for every other type.
+    RemarryParams       remarry_params        = 13;
+  }
+}
+
+enum CommandStatus {
+  // Not used. The device always sets an explicit status.
+  COMMAND_STATUS_UNSPECIFIED = 0;
+
+  // The device was taken out of lost mode.
+  SUCCESS = 1;
+
+  // The command did not execute. See failure_reason.
+  FAILED  = 2;
+}
+
+enum CommandFailureReason {
+  // Not used. The device always sets an explicit reason when it reports FAILED.
+  COMMAND_FAILURE_REASON_UNSPECIFIED = 0;
+
+  // The DPC is not device owner, so it lacks the privileges to execute anything. Not recorded, so a
+  // re-push retries for real.
+  NOT_DEVICE_OWNER  = 1;
+
+  // The parameters for this command type are missing, blank or malformed. Recorded: a re-push
+  // replays this answer instead of executing again.
+  INVALID_PARAMS    = 2;
+
+  // The device's Android release is too old, or in a few cases too new, to honour this command.
+  // Recorded.
+  COMMAND_API_LEVEL = 3;
+
+  // The package named in the parameters is not installed. Recorded.
+  PACKAGE_NOT_FOUND = 4;
+
+  // The device does not recognise this command type. Recorded.
+  UNKNOWN_COMMAND   = 5;
+
+  // An error has occurred while trying to add or remove the eSIM on the device, see
+  // internal_error_details.
+  INTERNAL_ERROR    = 6;
+
+  // The validity window had lapsed before the device could execute. Not recorded: expiry is judged
+  // against a clock the policy may still be correcting.
+  EXPIRED           = 7;
+}
+
+// A device owned by an enterprise. Unless otherwise noted, all fields are read-only and can't be
+// modified by enterprises.devices.patch.
+message DeviceInfo {
+  // The device's stable identity: the OAuth client id it enrolled with, which is its ANDROID_ID.
+  // Always reported.
+  string device_id       = 1;
+
+  // The type of management mode Android Device Policy takes on the device. This influences which
+  // policy settings are supported.
+  string management_mode = 2;
+
+  // Ownership of the managed device.
+  string ownership       = 3;
+
+  // The API level of the Android platform version running on the device.
+  int32  api_level       = 4;
+
+  // Detailed information about the device software. This information is only available if
+  // softwareInfoEnabled is true in the device's policy.
+  SoftwareInfo   software_info   = 5;
+
+  // Detailed information about the device hardware.
+  HardwareInfo   hardware_info   = 6;
+
+  // Detailed information about displays on the device. This information is only available if
+  // displayInfoEnabled is true in the device's policy.
+  repeated Display displays      = 7;
+
+  // Reports for apps installed on the device. This information is only available when
+  // application_reports_enabled is true in the device's policy.
+  repeated ApplicationReport application_reports = 8;
+
+  // Device network information. This information is only available if networkInfoEnabled is true in
+  // the device's policy.
+  NetworkInfo    network_info    = 9;
+
+  // Memory information: contains information about device memory and storage.
+  MemoryInfo     memory_info     = 10;
+
+  // Device settings information. This information is only available if deviceSettingsEnabled is
+  // true in the device's policy.
+  DeviceSettings device_settings = 11;
+
+  // Map of selected system properties name and value related to the device. This information is
+  // only available if systemPropertiesEnabled is true in the device's policy.
+  map<string, string> system_properties = 12;
+}
+
+// Information about device software.
+message SoftwareInfo {
+  // The user-visible Android version string. For example, 6.0.1.
+  string android_version        = 1;
+
+  // Android build ID string meant for displaying to the user. For example, shamu-userdebug 6.0.1
+  // MOB30I 2756745 dev-keys.
+  string android_build_number   = 2;
+
+  // Kernel version, for example, 2.6.32.9-g103d848.
+  string device_kernel_version  = 3;
+
+  // The system bootloader version number, e.g. 0.6.7.
+  string bootloader_version     = 4;
+
+  // Build time.
+  string android_build_time     = 5;
+
+  // Security patch level, e.g. 2016-05-01.
+  string security_patch_level   = 6;
+
+  // An IETF BCP 47 language code for the primary locale on the device.
+  string primary_language_code  = 7;
+
+  // SHA-256 hash of android.content.pm.Signature
+  // (https://developer.android.com/reference/android/content/pm/Signature.html) associated with the
+  // system package, which can be used to verify that the system build hasn't been modified.
+  string device_build_signature = 8;
+
+  // Information about a potential pending system update.
+  SystemUpdateInfo system_update_info = 9;
+}
+
+// Information about a potential pending system update.
+message SystemUpdateInfo {
+  // The status of an update: whether an update exists and what type it is.
+  string update_status = 1;
+}
+
+// Information about device hardware. The fields related to temperature thresholds are only
+// available if hardwareStatusEnabled is true in the device's policy.
+message HardwareInfo {
+  // Brand of the device. For example, Google.
+  string brand                   = 1;
+
+  // Name of the hardware. For example, Angler.
+  string hardware                = 2;
+
+  // Baseband version. For example, MDM9625_104662.22.05.34p.
+  string device_baseband_version = 3;
+
+  // Manufacturer. For example, Motorola.
+  string manufacturer            = 4;
+
+  // The device serial number. However, for personally-owned devices running Android 12 and above,
+  // this is the same as the enterpriseSpecificId.
+  string serial_number           = 5;
+
+  // The model of the device. For example, Asus Nexus 7.
+  string model                   = 6;
+
+  // Battery shutdown temperature thresholds in Celsius for each battery on the device.
+  repeated float battery_shutdown_temperatures   = 7;
+
+  // Battery throttling temperature thresholds in Celsius for each battery on the device.
+  repeated float battery_throttling_temperatures = 8;
+
+  // CPU shutdown temperature thresholds in Celsius for each CPU on the device.
+  repeated float cpu_shutdown_temperatures       = 9;
+
+  // CPU throttling temperature thresholds in Celsius for each CPU on the device.
+  repeated float cpu_throttling_temperatures     = 10;
+
+  // GPU shutdown temperature thresholds in Celsius for each GPU on the device.
+  repeated float gpu_shutdown_temperatures       = 11;
+
+  // GPU throttling temperature thresholds in Celsius for each GPU on the device.
+  repeated float gpu_throttling_temperatures     = 12;
+
+  // Device skin shutdown temperature thresholds in Celsius.
+  repeated float skin_shutdown_temperatures      = 13;
+
+  // Device skin throttling temperature thresholds in Celsius.
+  repeated float skin_throttling_temperatures    = 14;
+}
+
+// Device display information.
+message Display {
+  // Name of the display.
+  string name         = 1;
+
+  // Refresh rate of the display in frames per second.
+  int32  refresh_rate = 2;
+
+  // State of the display.
+  string state        = 3;
+
+  // Display width in pixels.
+  int32  width        = 4;
+
+  // Display height in pixels.
+  int32  height       = 5;
+
+  // Display density expressed as dots-per-inch.
+  int32  density      = 6;
+}
+
+// Information reported about an installed app.
+message ApplicationReport {
+  // Package name of the app.
+  string package_name                  = 1;
+
+  // The app version as displayed to the user.
+  string version_name                  = 2;
+
+  // The app version code, which can be used to determine whether one version is more recent than
+  // another.
+  int64  version_code                  = 3;
+
+  // The display name of the app.
+  string display_name                  = 4;
+
+  // Deprecated. Use signingKeyCerts instead. The SHA-1 hash of each android.content.pm.Signature
+  // (https://developer.android.com/reference/android/content/pm/Signature.html) associated with the
+  // app package. Each byte of each hash value is represented as a two-digit hexadecimal number.
+  repeated string signing_key_cert_fingerprints = 5;
+
+  // The package name of the app that installed this app.
+  string installer_package_name        = 6;
+
+  // The source of the package.
+  string application_source            = 7;
+
+  // Application state.
+  string state                         = 8;
+
+  // Whether the app is user facing.
+  string user_facing_type              = 9;
+}
+
+// Device network info.
+message NetworkInfo {
+  // IMEI number of the GSM device. For example, A1000031212.
+  string imei                  = 1;
+
+  // Alphabetic name of current registered operator. For example, Vodafone.
+  string network_operator_name = 2;
+
+  // Provides telephony information associated with each SIM card on the device. Only supported on
+  // fully managed devices starting from Android 6.
+  repeated TelephonyInfo telephony_infos = 3;
+}
+
+// Telephony information associated with a given SIM card on the device. This is supported for all
+// SIM cards on fully managed devices on Android 6 and above. In addition, this is supported for
+// admin-added eSIMs on all devices for Android 15 and above.
+message TelephonyInfo {
+  // The carrier name associated with this SIM card.
+  string carrier_name = 1;
+
+  // Output only. The ICCID associated with this SIM card.
+  string icc_id       = 2;
+}
+
+// Information about device memory and storage.
+message MemoryInfo {
+  // Total RAM on device in bytes.
+  int64 total_ram              = 1;
+
+  // Total internal storage on device in bytes.
+  int64 total_internal_storage = 2;
+}
+
+// Information about security related device settings on device.
+message DeviceSettings {
+  // Whether installing apps from unknown sources is enabled.
+  bool   unknown_sources_enabled      = 1;
+
+  // Whether developer mode is enabled on the device.
+  bool   development_settings_enabled = 2;
+
+  // Whether ADB (https://developer.android.com/studio/command-line/adb.html) is enabled on the
+  // device.
+  bool   adb_enabled                  = 3;
+
+  // Whether the storage encryption is enabled.
+  bool   is_encrypted                 = 4;
+
+  // Encryption status from DevicePolicyManager.
+  string encryption_status            = 5;
+
+  // Whether Google Play Protect verification (https://support.google.com/accounts/answer/2812853)
+  // is enforced on the device.
+  bool   verify_apps_enabled          = 6;
+}
+
+// The device's answer to exactly one command. Xamanta-specific shape: Android Management API
+// answers issueCommand with a long-running Operation that the administrator polls, while here the
+// answer is a message on the same stream, correlated by id.
+message CommandResult {
+  // The id of the command being answered. Always echoed, including for a command that failed before
+  // it could be understood.
+  string id = 1;
+
+  // Whether the command succeeded.
+  CommandStatus status = 2;
+
+  // Why the command failed. Meaningful only when status is FAILED.
+  CommandFailureReason failure_reason = 3;
+
+  // Human-readable detail for an operator reading a log. Diagnostic only: never parse it, the
+  // wording is not part of the contract.
+  string failure_message = 4;
+
+  // The time at which the device finished executing the command, as an ISO-8601 instant. For a
+  // destructive command this is the moment the result was produced, immediately before the action.
+  string executed_at = 5;
+
+  oneof payload {
+    // Present only for a successful REQUEST_DEVICE_INFO.
+    DeviceInfo device_info = 10;
+  }
+}
+
+// The command channel. The device is the gRPC client and opens the stream; the server never
+// connects to the device. Note the direction: the request stream carries CommandResult from device
+// to server, and the response stream carries Command from server to device.
+service CommandService {
+  // Opens the command channel. The server pushes a Command whenever an administrator issues one,
+  // and the device replies with exactly one CommandResult per Command, correlated by id. Results
+  // owed from an earlier connection are re-sent when the stream opens, without re-executing
+  // anything. Destructive commands write their result before the action runs.
+  rpc CommandChannel(stream CommandResult) returns (stream Command);
+}

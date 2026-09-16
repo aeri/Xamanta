@@ -1,0 +1,84 @@
+<resources>
+    <string name="app_name">Xamanta</string>
+
+    <string name="sync_screen_title">Xamanta Device Policy</string>
+    <string name="status_placeholder">—</string>
+    <string name="status_none">None</string>
+
+    <string name="section_device">Device</string>
+    <string name="section_enrollment">Enrollment</string>
+    <string name="section_connection">Connection</string>
+    <string name="section_policy">Policy</string>
+    <string name="section_actions">Actions</string>
+
+    <string name="device_id">Device ID</string>
+    <string name="device_id_unavailable">unavailable</string>
+
+    <string name="enrollment_status">Status</string>
+    <string name="enrollment_server">Server</string>
+    <string name="enrollment_server_summary">%1$s:%2$d</string>
+    <string name="enrollment_token_endpoint">Token endpoint</string>
+    <string name="enrollment_last_error">Last auth error</string>
+    <string name="enrollment_state_needs_reenrollment">Needs re-enrollment</string>
+    <string name="enrollment_state_enrolled">Enrolled</string>
+    <string name="enrollment_state_not_enrolled">Not enrolled</string>
+
+    <string name="connection_stream">gRPC stream</string>
+    <string name="connection_state_paused">Paused — needs re-enrollment</string>
+    <string name="connection_state_not_connected">Not connected (no enrollment)</string>
+    <string name="connection_state_active">Active (managed by PolicyService)</string>
+
+    <string name="token_status">Access token</string>
+    <string name="token_state_rejected">Credentials rejected by server</string>
+    <string name="token_state_unavailable">Not available</string>
+    <string name="token_state_valid">Valid — expires %1$s</string>
+    <string name="token_state_expiring">Expiring soon</string>
+    <string name="token_state_expired">Expired — will re-authenticate</string>
+
+    <string name="policy_name">Name</string>
+    <string name="policy_version">Version</string>
+    <string name="policy_description">Description</string>
+    <string name="policy_apps">Applications</string>
+    <string name="policy_apps_summary">%1$d total — %2$d managed, %3$d blocked</string>
+    <string name="policy_kiosk">Kiosk app</string>
+
+    <string name="sync">Sync policy</string>
+    <string name="sync_action_summary">Force sync with management server</string>
+    <string name="sync_action_disabled_summary">Provision the device to enroll</string>
+    <string name="sync_started">Policy service started</string>
+    <string name="sync_not_enrolled">Device not enrolled — provision the device to enroll</string>
+    <string name="device_admin_unavailable">Device admin is not available</string>
+
+    <string name="enrolling_title">Enrolling device…</string>
+    <string name="enrolling_detail">Connecting to management server</string>
+    <string name="enrolled_title">Device enrolled</string>
+    <string name="enrolled_detail">This device is now managed by your organization.</string>
+    <string name="enrollment_failed_title">Enrollment failed</string>
+    <string name="retry">Retry</string>
+    <string name="continue_anyway">Continue</string>
+
+    <string name="enroll_error_missing_token_endpoint">Missing token endpoint</string>
+    <string name="enroll_error_missing_enrollment_token">Missing enrollment token</string>
+    <string name="enroll_error_missing_host">Missing gRPC host</string>
+    <string name="enroll_waiting_device_owner">Waiting for device owner</string>
+    <string name="enroll_waiting_device_identity">Waiting for device identity</string>
+    <string name="enroll_waiting_secure_storage">Waiting for secure storage</string>
+    <string name="enroll_error_token_rejected">Enrollment token rejected (401)</string>
+    <string name="enroll_error_registration_rejected">Registration rejected (400) — device already registered or invalid metadata</string>
+    <string name="enroll_error_server">Server error (HTTP %1$d)</string>
+    <string name="enroll_error_malformed_response">Malformed registration response: %1$s</string>
+    <string name="enroll_error_tls_untrusted">Server certificate not trusted — the CA from provisioning does not sign the certificate %1$s presents</string>
+    <string name="enroll_error_network">Network error: %1$s</string>
+    <string name="enroll_error_unexpected">Unexpected error: %1$s</string>
+    <string name="enroll_error_unknown">Unknown error</string>
+    <string name="enroll_cancelled">Enrollment was cancelled</string>
+
+    <string name="management_notification_title">Device Management</string>
+    <string name="management_notification_text">Device is managed by your organization</string>
+
+    <string name="support_message_short_default">Feature disabled</string>
+    <string name="support_message_long_default">This feature has been disabled by Xamanta.</string>
+
+    <string name="kiosk_degraded_title">App unavailable</string>
+    <string name="kiosk_degraded_detail">The kiosk app keeps closing and could not be started. The device stays locked. Contact your administrator or try again.</string>
+</resources>

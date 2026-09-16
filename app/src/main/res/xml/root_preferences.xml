@@ -1,0 +1,70 @@
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/section_device">
+        <Preference
+            app:key="device_id"
+            app:title="@string/device_id"
+            app:summary="@string/status_placeholder" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/section_enrollment">
+        <Preference
+            app:key="enrollment_status"
+            app:title="@string/enrollment_status"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="enrollment_server"
+            app:title="@string/enrollment_server"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="enrollment_token_endpoint"
+            app:title="@string/enrollment_token_endpoint"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="enrollment_last_error"
+            app:title="@string/enrollment_last_error"
+            app:summary="@string/status_placeholder" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/section_connection">
+        <Preference
+            app:key="connection_status"
+            app:title="@string/connection_stream"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="token_status"
+            app:title="@string/token_status"
+            app:summary="@string/status_placeholder" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/section_policy">
+        <Preference
+            app:key="policy_name"
+            app:title="@string/policy_name"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="policy_version"
+            app:title="@string/policy_version"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="policy_description"
+            app:title="@string/policy_description"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="policy_apps"
+            app:title="@string/policy_apps"
+            app:summary="@string/status_placeholder" />
+        <Preference
+            app:key="policy_kiosk"
+            app:title="@string/policy_kiosk"
+            app:summary="@string/status_placeholder" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/section_actions">
+        <Preference
+            app:icon="@drawable/baseline_sync_24"
+            app:key="sync"
+            app:title="@string/sync" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
