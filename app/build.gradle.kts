@@ -35,7 +35,7 @@ android {
         applicationId = "cat.naval.xamanta"
         minSdk = 21
         targetSdk = 36
-        versionCode = 8
+        versionCode = 1
         versionName = "1.0.0-beta.1"
     }
 

@@ -119,13 +119,8 @@ class LockedActivity : Activity() {
             return
         }
 
-        val relaunch = policyStore.launchedKiosk() == kioskPackage
-        launch.flags = if (relaunch) {
-            Intent.FLAG_ACTIVITY_NEW_TASK
-        } else {
-            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-        }
-        Log.d(TAG, "Launching kiosk app '$kioskPackage' (attempt ${attempt + 1}, relaunch=$relaunch)")
+        launch.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        Log.d(TAG, "Launching kiosk app '$kioskPackage' (attempt ${attempt + 1})")
 
         try {
             if (SDK_INT >= VERSION_CODES.P) {

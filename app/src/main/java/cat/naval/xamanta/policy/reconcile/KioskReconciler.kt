@@ -56,13 +56,15 @@ class KioskReconciler(
 
         val alreadyUp = KioskManager.isLockTaskActive(context) &&
                 policyStore.launchedKiosk() == kioskApp.packageName
-        if (forceTransition || !alreadyUp) {
+        val unpinned = policyStore.isKioskUnpinned(kioskApp.packageName)
+        if (forceTransition || (!alreadyUp && !unpinned)) {
             Log.i(TAG, "entering kiosk mode on '${kioskApp.packageName}' (force=$forceTransition)")
             KioskManager.startKiosk(context)
         }
 
-        val unpinnedDetail = if (policyStore.isKioskUnpinned(kioskApp.packageName)) {
-            Log.e(TAG, "kiosk app '${kioskApp.packageName}' never entered lock task — reporting")
+        val unpinnedDetail = if (unpinned) {
+            Log.e(TAG, "kiosk app '${kioskApp.packageName}' never entered lock task — next attempt on retry")
+            policyStore.setKioskUnpinned(null)
             NonCompliance.kioskNotPinned(kioskApp.packageName)
         } else {
             null
